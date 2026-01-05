@@ -14,9 +14,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#include "game/collision.h"
 #include "game/game_state.h"
 #include "game/police.h"
-#include "game/collision.h"
 #include "gl_utils.h"
 #include "math.h"
 
@@ -55,10 +55,6 @@ struct ObjIndex {
   int vn = 0;
 };
 
-static Vec3 gTarget = {0.0f, 0.0f, 0.0f};
-static Vec3 gCamPos = {0.0f, 0.0f, 0.0f};
-static bool gCamInitialized = false;
-
 static std::string Trim(const std::string &s) {
   size_t start = s.find_first_not_of(" \t\r\n");
   if (start == std::string::npos) {
@@ -76,10 +72,6 @@ static std::vector<std::string> SplitWhitespace(const std::string &s) {
     parts.push_back(part);
   }
   return parts;
-}
-
-static Vec3 Lerp(const Vec3 &a, const Vec3 &b, float t) {
-  return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t};
 }
 
 static int ResolveIndex(int idx, int size) {
@@ -133,14 +125,18 @@ static std::string Dirname(const std::string &path) {
 static long long HashPoint(const Vec2 &p, float quantize) {
   int ix = static_cast<int>(std::round(p.x * quantize));
   int iy = static_cast<int>(std::round(p.y * quantize));
-  return (static_cast<long long>(ix) << 32) ^ static_cast<unsigned long long>(iy);
+  return (static_cast<long long>(ix) << 32) ^
+         static_cast<unsigned long long>(iy);
 }
 
-static void ExtractRoadPoints(const Model &model, float worldScale, std::vector<Vec2> &outPoints, std::vector<Triangle2> &outTriangles) {
+static void ExtractRoadPoints(const Model &model, float worldScale,
+                              std::vector<Vec2> &outPoints,
+                              std::vector<Triangle2> &outTriangles) {
   // Drivable surface: Layer 1 and asphalt (Roads.png)
-  static const std::unordered_set<std::string> kRoadMaterials = {"Material.007", "Material.008"};
+  static const std::unordered_set<std::string> kRoadMaterials = {
+      "Material.007", "Material.008"};
   std::unordered_set<long long> seen;
-  const float quantize = 1000.0f;  // ~1mm at world units
+  const float quantize = 1000.0f; // ~1mm at world units
 
   for (const auto &mesh : model.meshes) {
     if (kRoadMaterials.find(mesh.materialName) == kRoadMaterials.end()) {
@@ -178,7 +174,7 @@ static bool PointInTriangle(const Vec2 &p, const Triangle2 &t) {
 
 static bool InsideRoad(const Vec2 &p, const std::vector<Triangle2> &tris) {
   if (tris.empty()) {
-    return true;  // fallback to allow movement if road data missing
+    return true; // fallback to allow movement if road data missing
   }
   for (const auto &tri : tris) {
     if (PointInTriangle(p, tri)) {
@@ -188,7 +184,8 @@ static bool InsideRoad(const Vec2 &p, const std::vector<Triangle2> &tris) {
   return false;
 }
 
-static bool LoadMtl(const std::string &path, std::unordered_map<std::string, Material> &materials) {
+static bool LoadMtl(const std::string &path,
+                    std::unordered_map<std::string, Material> &materials) {
   std::ifstream file(path);
   if (!file) {
     std::cerr << "Nao foi possivel abrir MTL: " << path << "\n";
@@ -212,7 +209,8 @@ static bool LoadMtl(const std::string &path, std::unordered_map<std::string, Mat
     } else if (line.rfind("Kd ", 0) == 0 && current) {
       auto parts = SplitWhitespace(line);
       if (parts.size() >= 4) {
-        current->kd = {std::stof(parts[1]), std::stof(parts[2]), std::stof(parts[3])};
+        current->kd = {std::stof(parts[1]), std::stof(parts[2]),
+                       std::stof(parts[3])};
       }
     } else if (line.rfind("map_Kd ", 0) == 0 && current) {
       std::string mapName = Trim(line.substr(7));
@@ -269,11 +267,13 @@ static bool LoadObj(const std::string &path, Model &model) {
         LoadMtl(fallback, materials);
       }
     } else if (parts[0] == "v" && parts.size() >= 4) {
-      positions.push_back({std::stof(parts[1]), std::stof(parts[2]), std::stof(parts[3])});
+      positions.push_back(
+          {std::stof(parts[1]), std::stof(parts[2]), std::stof(parts[3])});
     } else if (parts[0] == "vt" && parts.size() >= 3) {
       texcoords.push_back({std::stof(parts[1]), std::stof(parts[2])});
     } else if (parts[0] == "vn" && parts.size() >= 4) {
-      normals.push_back({std::stof(parts[1]), std::stof(parts[2]), std::stof(parts[3])});
+      normals.push_back(
+          {std::stof(parts[1]), std::stof(parts[2]), std::stof(parts[3])});
     } else if (parts[0] == "usemtl" && parts.size() >= 2) {
       currentMaterial = parts[1];
       if (meshBuilders.find(currentMaterial) == meshBuilders.end()) {
@@ -296,31 +296,41 @@ static bool LoadObj(const std::string &path, Model &model) {
         ObjIndex i1 = indices[i];
         ObjIndex i2 = indices[i + 1];
 
-        Vec3 p0 = positions[ResolveIndex(i0.v, static_cast<int>(positions.size()))];
-        Vec3 p1 = positions[ResolveIndex(i1.v, static_cast<int>(positions.size()))];
-        Vec3 p2 = positions[ResolveIndex(i2.v, static_cast<int>(positions.size()))];
+        Vec3 p0 =
+            positions[ResolveIndex(i0.v, static_cast<int>(positions.size()))];
+        Vec3 p1 =
+            positions[ResolveIndex(i1.v, static_cast<int>(positions.size()))];
+        Vec3 p2 =
+            positions[ResolveIndex(i2.v, static_cast<int>(positions.size()))];
 
-        bool hasNormals = (i0.vn != 0 && i1.vn != 0 && i2.vn != 0 && !normals.empty());
+        bool hasNormals =
+            (i0.vn != 0 && i1.vn != 0 && i2.vn != 0 && !normals.empty());
         Vec3 faceNormal = Normalize(Cross(p1 - p0, p2 - p0));
 
-        auto addVertex = [&](const ObjIndex &idx, const Vec3 &fallbackNormal, const Vec3 &pos) {
+        auto addVertex = [&](const ObjIndex &idx, const Vec3 &fallbackNormal,
+                             const Vec3 &pos) {
           Vec3 normal = fallbackNormal;
           if (hasNormals) {
-            int normalIndex = ResolveIndex(idx.vn, static_cast<int>(normals.size()));
-            if (normalIndex >= 0 && normalIndex < static_cast<int>(normals.size())) {
+            int normalIndex =
+                ResolveIndex(idx.vn, static_cast<int>(normals.size()));
+            if (normalIndex >= 0 &&
+                normalIndex < static_cast<int>(normals.size())) {
               normal = normals[normalIndex];
             }
           }
 
           Vec2 texCoord = {0.0f, 0.0f};
           if (idx.vt != 0 && !texcoords.empty()) {
-            int texIndex = ResolveIndex(idx.vt, static_cast<int>(texcoords.size()));
-            if (texIndex >= 0 && texIndex < static_cast<int>(texcoords.size())) {
+            int texIndex =
+                ResolveIndex(idx.vt, static_cast<int>(texcoords.size()));
+            if (texIndex >= 0 &&
+                texIndex < static_cast<int>(texcoords.size())) {
               texCoord = texcoords[texIndex];
             }
           }
 
-          meshBuilders[currentMaterial].vertices.push_back({pos, normal, texCoord});
+          meshBuilders[currentMaterial].vertices.push_back(
+              {pos, normal, texCoord});
         };
 
         addVertex(i0, faceNormal, p0);
@@ -391,14 +401,17 @@ static void SetupMesh(Mesh &mesh) {
   glGenBuffers(1, &mesh.vbo);
   glBindVertexArray(mesh.vao);
   glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
-  glBufferData(GL_ARRAY_BUFFER, mesh.vertices.size() * sizeof(Vertex), mesh.vertices.data(), GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, mesh.vertices.size() * sizeof(Vertex),
+               mesh.vertices.data(), GL_STATIC_DRAW);
 
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *)0);
   glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *)(offsetof(Vertex, normal)));
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void *)(offsetof(Vertex, normal)));
   glEnableVertexAttribArray(2);
-  glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *)(offsetof(Vertex, texCoord)));
+  glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void *)(offsetof(Vertex, texCoord)));
 
   glBindVertexArray(0);
 }
@@ -408,7 +421,8 @@ static GLuint LoadTexture2D(const std::string &path) {
   int height = 0;
   int channels = 0;
   stbi_set_flip_vertically_on_load(1);
-  stbi_uc *data = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+  stbi_uc *data =
+      stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
   if (!data) {
     std::cerr << "Falha ao carregar textura: " << path << "\n";
     return 0;
@@ -417,11 +431,13 @@ static GLuint LoadTexture2D(const std::string &path) {
   GLuint texture = 0;
   glGenTextures(1, &texture);
   glBindTexture(GL_TEXTURE_2D, texture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, data);
   glGenerateMipmap(GL_TEXTURE_2D);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                  GL_LINEAR_MIPMAP_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
   stbi_image_free(data);
@@ -495,7 +511,9 @@ int main() {
   }
 
   Model policeCarModel;
-  if (!LoadObj("assets/textures/carro_policia/Ford Crown Victoria Police Interceptor.obj", policeCarModel)) {
+  if (!LoadObj("assets/textures/carro_policia/Ford Crown Victoria Police "
+               "Interceptor.obj",
+               policeCarModel)) {
     glfwDestroyWindow(window);
     glfwTerminate();
     return 1;
@@ -515,8 +533,10 @@ int main() {
     SetupMesh(mesh);
   }
 
-  GLuint trackProgram = CreateProgram("TrackVertexShader.glsl", "TrackFragmentShader.glsl");
-  GLuint carProgram = CreateProgram("CarVertexShader.glsl", "CarFragmentShader.glsl");
+  GLuint trackProgram =
+      CreateProgram("TrackVertexShader.glsl", "TrackFragmentShader.glsl");
+  GLuint carProgram =
+      CreateProgram("CarVertexShader.glsl", "CarFragmentShader.glsl");
   if (!trackProgram || !carProgram) {
     glfwDestroyWindow(window);
     glfwTerminate();
@@ -545,8 +565,8 @@ int main() {
 
   const float worldScale = 40.0f;
   const float trackHalfExtent = worldScale * 0.5f - 0.5f;
-  const float carScale = worldScale * 0.008f;
-  const float policeCarScale = worldScale * 0.012f;
+  const float carScale = worldScale * 0.005f;
+  const float policeCarScale = worldScale * 0.0075f;
   const float carBaseRotation = 3.1415926f / 2.0f;
   const float policeBaseRotation = 3.1415926f * 2.0f;
   float carLift = 0.02f * carScale;
@@ -554,16 +574,18 @@ int main() {
 
   GameState gameState;
   MovementConfig movementConfig;
-  MovementConfig policeMovementConfig = movementConfig;
+  movementConfig.maxSpeed = 4.0f;      // Slower player
+  MovementConfig policeMovementConfig; // Default maxSpeed 5.0f
   gameState.player.position = {0.0f, 0.0f, -6.0f};
   gameState.player.heading = 0.0f;
   gameState.police.position = {0.0f, 0.0f, -8.0f};
   gameState.police.heading = 0.0f;
-  ExtractRoadPoints(trackModel, worldScale, gameState.roadPoints, gameState.roadTriangles);
+  ExtractRoadPoints(trackModel, worldScale, gameState.roadPoints,
+                    gameState.roadTriangles);
 
   bool gameOver = false;
-  const float catchDistance = 0.6f;
-  const float policeStartDelay = 5.0f;
+  const float catchDistance = 0.3f;
+  const float policeStartDelay = 1.0f;
 
   float startTime = static_cast<float>(glfwGetTime());
   float lastFrameTime = startTime;
@@ -579,13 +601,22 @@ int main() {
       Vec3 prevPolicePos = gameState.police.position;
 
       InputState input = ReadPlayerInput(window);
-      UpdatePlayer(gameState.player, input, deltaTime, movementConfig, carBaseRotation, trackHalfExtent);
-      UpdatePoliceChase(gameState.police, gameState.player, deltaTime, elapsedTime, policeStartDelay, policeMovementConfig, trackHalfExtent);
+      UpdatePlayer(gameState.player, input, deltaTime, movementConfig,
+                   carBaseRotation, trackHalfExtent, gameState.playerTrail);
+      UpdatePoliceChase(gameState.police, gameState.player, deltaTime,
+                        elapsedTime, policeStartDelay, policeMovementConfig,
+                        trackHalfExtent, gameState.playerTrail);
 
-      if (!InsideRoad({gameState.player.position.x, gameState.player.position.z}, gameState.roadTriangles)) {
+      if (!InsideRoad(
+              {gameState.player.position.x, gameState.player.position.z},
+              gameState.roadTriangles)) {
         gameState.player.position = prevPlayerPos;
+        gameState.player.velocity = {0.0f, 0.0f, 0.0f};
+        gameState.player.speed = 0.0f;
       }
-      if (!InsideRoad({gameState.police.position.x, gameState.police.position.z}, gameState.roadTriangles)) {
+      if (!InsideRoad(
+              {gameState.police.position.x, gameState.police.position.z},
+              gameState.roadTriangles)) {
         gameState.police.position = prevPolicePos;
       }
 
@@ -604,48 +635,39 @@ int main() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     float aspect = (height > 0) ? (static_cast<float>(width) / height) : 1.0f;
-    Mat4 proj = Mat4Perspective(45.0f * 3.1415926f / 180.0f, aspect, 0.1f, 100.0f);
+    Mat4 proj =
+        Mat4Perspective(45.0f * 3.1415926f / 180.0f, aspect, 0.1f, 100.0f);
 
-    Vec3 carPos = {
-        gameState.player.position.x,
-        -carModel.minY * carScale + carLift + 0.05f,
-        gameState.player.position.z};
-    // Third-person camera: always follow behind the car, aligned with heading
-    float backYaw = gameState.player.heading + carBaseRotation + 3.1415926f;  // alignment with model orientation
+    Vec3 carPos = {gameState.player.position.x,
+                   -carModel.minY * carScale + carLift + 0.05f,
+                   gameState.player.position.z};
+    float backYaw = gameState.player.heading + carBaseRotation + 3.1415926f;
     Vec3 backDir = {std::cos(backYaw), 0.0f, std::sin(backYaw)};
-    const float startDist = 3.5f;
-    const float startHeight = 1.6f;
-    const float followDist = 2.2f;
-    const float followHeight = 1.2f;
-
-    Vec3 desiredEye = carPos + backDir * followDist + Vec3{0.0f, followHeight, 0.0f};
-    if (!gCamInitialized) {
-      gCamPos = carPos + backDir * startDist + Vec3{0.0f, startHeight, 0.0f};
-      gCamInitialized = true;
-    } else {
-      float smooth = 1.0f - std::exp(-6.0f * deltaTime);  // quick but smooth follow
-      gCamPos = Lerp(gCamPos, desiredEye, smooth);
-      gCamPos.y = desiredEye.y;  // keep vertical offset fixed; only rotate in the horizontal plane
-    }
+    const float followDist = 3.5f;
+    const float followHeight = 1.6f;
+    const float targetHeight = 0.8f;
+    Vec3 eye = carPos + backDir * followDist + Vec3{0.0f, followHeight, 0.0f};
+    Vec3 target = carPos + Vec3{0.0f, targetHeight, 0.0f};
     float groundY = -trackModel.minY * worldScale;
-    gCamPos.y = std::max(gCamPos.y, groundY + 0.5f);  // keep camera above track plane
-    Vec3 eye = gCamPos;
-
-    Mat4 view = Mat4LookAt(eye, gTarget, {0.0f, 1.0f, 0.0f});
-    Mat4 trackMat = Mat4Multiply(
-        Mat4Translate({0.0f, -trackModel.minY * worldScale, 0.0f}),
-        Mat4Scale(worldScale));
+    eye.y = std::max(eye.y, groundY + 1.0f);
+    target.y = std::max(target.y, groundY + 0.5f);
+    Mat4 view = Mat4LookAt(eye, target, {0.0f, 1.0f, 0.0f});
+    Mat4 trackMat =
+        Mat4Multiply(Mat4Translate({0.0f, -trackModel.minY * worldScale, 0.0f}),
+                     Mat4Scale(worldScale));
     Mat4 carMat = Mat4Multiply(
         Mat4Translate(carPos),
-        Mat4Multiply(Mat4RotateY(gameState.player.heading + carBaseRotation), Mat4Scale(carScale)));
-    
-    Vec3 policePos = {
-        gameState.police.position.x,
-        -policeCarModel.minY * policeCarScale + policeLift + 0.05f,
-        gameState.police.position.z};
+        Mat4Multiply(Mat4RotateY(gameState.player.heading + carBaseRotation),
+                     Mat4Scale(carScale)));
+
+    Vec3 policePos = {gameState.police.position.x,
+                      -policeCarModel.minY * policeCarScale + policeLift +
+                          0.05f,
+                      gameState.police.position.z};
     Mat4 policeCarMat = Mat4Multiply(
         Mat4Translate(policePos),
-        Mat4Multiply(Mat4RotateY(gameState.police.heading + policeBaseRotation), Mat4Scale(policeCarScale)));
+        Mat4Multiply(Mat4RotateY(gameState.police.heading + policeBaseRotation),
+                     Mat4Scale(policeCarScale)));
 
     glUseProgram(trackProgram);
     glUniformMatrix4fv(trackLocModel, 1, GL_FALSE, trackMat.m);

@@ -14,11 +14,11 @@ struct InputState {
 };
 
 struct MovementConfig {
-  float acceleration = 12.0f;
+  float acceleration = 4.0f;
   float braking = 30.0f;
   float drag = 1.5f;
-  float maxSpeed = 18.0f;
-  float turnRate = 2.8f;
+  float maxSpeed = 5.0f;
+  float turnRate = 2.5f;
 };
 
 struct VehicleState {
@@ -39,7 +39,10 @@ struct GameState {
   VehicleState police;
   std::vector<Vec2> roadPoints;
   std::vector<Triangle2> roadTriangles;
+  std::vector<Vec3> playerTrail;
 };
 
 InputState ReadPlayerInput(GLFWwindow *window);
-void UpdatePlayer(VehicleState &player, const InputState &input, float dt, const MovementConfig &config, float headingOffset, float trackHalfExtent);
+void UpdatePlayer(VehicleState &player, const InputState &input, float dt,
+                  const MovementConfig &config, float headingOffset,
+                  float trackHalfExtent, std::vector<Vec3> &trail);

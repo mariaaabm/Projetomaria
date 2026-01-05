@@ -125,15 +125,15 @@ inline Mat4 Mat4LookAt(const Vec3 &eye, const Vec3 &target, const Vec3 &up) {
 
   Mat4 out = Mat4Identity();
   out.m[0] = s.x;
-  out.m[1] = s.y;
-  out.m[2] = s.z;
+  out.m[4] = s.y;
+  out.m[8] = s.z;
 
-  out.m[4] = u.x;
+  out.m[1] = u.x;
   out.m[5] = u.y;
-  out.m[6] = u.z;
+  out.m[9] = u.z;
 
-  out.m[8] = -f.x;
-  out.m[9] = -f.y;
+  out.m[2] = -f.x;
+  out.m[6] = -f.y;
   out.m[10] = -f.z;
 
   out.m[12] = -Dot(s, eye);

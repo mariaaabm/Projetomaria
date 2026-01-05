@@ -13,7 +13,21 @@ InputState ReadPlayerInput(GLFWwindow *window) {
   return input;
 }
 
-void UpdatePlayer(VehicleState &player, const InputState &input, float dt, const MovementConfig &config, float headingOffset, float trackHalfExtent) {
+void UpdatePlayer(VehicleState &player, const InputState &input, float dt,
+                  const MovementConfig &config, float headingOffset,
+                  float trackHalfExtent, std::vector<Vec3> &trail) {
+  // Record trail
+  if (trail.empty()) {
+    trail.push_back(player.position);
+  } else {
+    Vec3 last = trail.back();
+    float distSq = (player.position.x - last.x) * (player.position.x - last.x) +
+                   (player.position.z - last.z) * (player.position.z - last.z);
+    if (distSq > 2.0f * 2.0f) { // Every 2 meters
+      trail.push_back(player.position);
+    }
+  }
+
   float clampedDt = std::max(dt, 0.0f);
 
   float worldHeading = player.heading + headingOffset;
@@ -53,15 +67,21 @@ void UpdatePlayer(VehicleState &player, const InputState &input, float dt, const
     steerInput += 1.0f;
   }
   if (steerInput != 0.0f) {
-    float speedFactor = std::clamp(std::abs(player.speed) / config.maxSpeed, 0.0f, 1.0f);
-    float directionSign = (player.speed >= 0.0f) ? 1.0f : -1.0f;
-    player.heading += steerInput * config.turnRate * speedFactor * clampedDt * directionSign;
+    float speedAbs = std::abs(player.speed);
+    if (speedAbs > 0.05f) {
+      float speedFactor = std::clamp(speedAbs / config.maxSpeed, 0.0f, 1.0f);
+      float directionSign = (player.speed >= 0.0f) ? 1.0f : -1.0f;
+      player.heading += steerInput * config.turnRate * speedFactor * clampedDt *
+                        directionSign;
+    }
     worldHeading = player.heading + headingOffset;
     forwardDir = {std::cos(worldHeading), 0.0f, std::sin(worldHeading)};
   }
 
   player.velocity = forwardDir * player.speed;
   player.position = player.position + player.velocity * clampedDt;
-  player.position.x = std::clamp(player.position.x, -trackHalfExtent, trackHalfExtent);
-  player.position.z = std::clamp(player.position.z, -trackHalfExtent, trackHalfExtent);
+  player.position.x =
+      std::clamp(player.position.x, -trackHalfExtent, trackHalfExtent);
+  player.position.z =
+      std::clamp(player.position.z, -trackHalfExtent, trackHalfExtent);
 }
