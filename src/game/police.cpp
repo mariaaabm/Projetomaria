@@ -21,6 +21,7 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target, float d
   float clampedDt = std::max(dt, 0.0f);
   if (elapsedSeconds < startDelaySeconds) {
     police.velocity = {0.0f, 0.0f, 0.0f};
+    police.speed = 0.0f;
     return;
   }
 
@@ -30,26 +31,34 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target, float d
     return;
   }
 
-  float desiredYaw = std::atan2(toTarget.x, toTarget.z);
-  float yawDiff = NormalizeAngle(desiredYaw - police.heading);
+  const float headingOffset = 3.1415926f / 2.0f;
+  float worldHeading = police.heading + headingOffset;
 
-  const float turnRate = 2.5f;
-  float steer = std::clamp(yawDiff, -1.0f, 1.0f);
-  police.heading += steer * turnRate * clampedDt;
+  float desiredYaw = std::atan2(toTarget.z, toTarget.x);
+  float yawDiff = NormalizeAngle(desiredYaw - worldHeading);
 
-  float speedFactor = std::clamp(1.0f - (std::abs(yawDiff) / (3.1415926f * 0.5f)), 0.25f, 1.0f);
-  Vec3 forwardDir = {std::sin(police.heading), 0.0f, std::cos(police.heading)};
-  float desiredSpeed = std::min(config.maxSpeed * speedFactor, distance * 0.8f);
-  float forwardSpeed = Dot(police.velocity, forwardDir);
-  float speedError = desiredSpeed - forwardSpeed;
+  float steerInput = std::clamp(yawDiff, -1.0f, 1.0f);
+  if (steerInput != 0.0f) {
+    float speedFactor = std::clamp(std::abs(police.speed) / config.maxSpeed, 0.0f, 1.0f);
+    police.heading += steerInput * config.turnRate * speedFactor * clampedDt;
+    worldHeading = police.heading + headingOffset;
+  }
+
+  Vec3 forwardDir = {std::cos(worldHeading), 0.0f, std::sin(worldHeading)};
+
+  float desiredSpeed = std::min(config.maxSpeed, distance * 0.8f);
+  float speedError = desiredSpeed - police.speed;
   float accelCmd = std::clamp(speedError, -config.acceleration, config.acceleration);
-  forwardSpeed += accelCmd * clampedDt;
+  police.speed += accelCmd * clampedDt;
 
-  float dragFactor = std::max(0.0f, 1.0f - config.drag * clampedDt);
-  forwardSpeed *= dragFactor;
-  forwardSpeed = std::clamp(forwardSpeed, -config.maxSpeed, config.maxSpeed);
+  if (police.speed > 0.0f) {
+    police.speed = std::max(0.0f, police.speed - config.drag * clampedDt);
+  } else if (police.speed < 0.0f) {
+    police.speed = std::min(0.0f, police.speed + config.drag * clampedDt);
+  }
 
-  police.velocity = forwardDir * forwardSpeed;
+  police.speed = std::clamp(police.speed, -config.maxSpeed * 0.2f, config.maxSpeed);
 
+  police.velocity = forwardDir * police.speed;
   police.position = police.position + police.velocity * clampedDt;
 }

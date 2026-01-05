@@ -47,10 +47,10 @@ void UpdatePlayer(VehicleState &player, const InputState &input, float dt, const
 
   float steerInput = 0.0f;
   if (input.left) {
-    steerInput += 1.0f;
+    steerInput -= 1.0f;
   }
   if (input.right) {
-    steerInput -= 1.0f;
+    steerInput += 1.0f;
   }
   if (steerInput != 0.0f) {
     float speedFactor = std::clamp(std::abs(player.speed) / config.maxSpeed, 0.0f, 1.0f);

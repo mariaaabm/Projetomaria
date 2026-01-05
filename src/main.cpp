@@ -614,7 +614,7 @@ int main() {
     glUniformMatrix4fv(trackLocView, 1, GL_FALSE, view.m);
     glUniformMatrix4fv(trackLocProj, 1, GL_FALSE, proj.m);
     glUniform3f(trackLocLight, -0.6f, -1.0f, -0.3f);
-    glUniform3f(trackLocLight2, 0.5f, -0.7f, 0.6f);
+    glUniform3f(trackLocLight2, 0.25f, -0.35f, 0.3f);
     glUniform3f(trackLocAmbient, 0.22f, 0.22f, 0.22f);
     glUniform1i(trackLocTexture, 0);
 
@@ -643,7 +643,7 @@ int main() {
     glUniformMatrix4fv(carLocView, 1, GL_FALSE, view.m);
     glUniformMatrix4fv(carLocProj, 1, GL_FALSE, proj.m);
     glUniform3f(carLocLight, -0.6f, -1.0f, -0.3f);
-    glUniform3f(carLocLight2, 0.5f, -0.7f, 0.6f);
+    glUniform3f(carLocLight2, 0.25f, -0.35f, 0.3f);
     glUniform3f(carLocAmbient, 0.22f, 0.22f, 0.22f);
     glUniform1i(carLocTexture, 0);
 
