@@ -17,7 +17,7 @@ float NormalizeAngle(float angle) {
 }
 }  // namespace
 
-void UpdatePoliceChase(VehicleState &police, const VehicleState &target, float dt, float elapsedSeconds, float startDelaySeconds, const MovementConfig &config) {
+void UpdatePoliceChase(VehicleState &police, const VehicleState &target, float dt, float elapsedSeconds, float startDelaySeconds, const MovementConfig &config, float trackHalfExtent) {
   float clampedDt = std::max(dt, 0.0f);
   if (elapsedSeconds < startDelaySeconds) {
     police.velocity = {0.0f, 0.0f, 0.0f};
@@ -46,7 +46,7 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target, float d
 
   Vec3 forwardDir = {std::cos(worldHeading), 0.0f, std::sin(worldHeading)};
 
-  float desiredSpeed = std::min(config.maxSpeed, distance * 0.8f);
+  float desiredSpeed = std::max(config.maxSpeed * 0.3f, std::min(config.maxSpeed, distance * 0.8f));
   float speedError = desiredSpeed - police.speed;
   float accelCmd = std::clamp(speedError, -config.acceleration, config.acceleration);
   police.speed += accelCmd * clampedDt;
@@ -61,4 +61,6 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target, float d
 
   police.velocity = forwardDir * police.speed;
   police.position = police.position + police.velocity * clampedDt;
+  police.position.x = std::clamp(police.position.x, -trackHalfExtent, trackHalfExtent);
+  police.position.z = std::clamp(police.position.z, -trackHalfExtent, trackHalfExtent);
 }

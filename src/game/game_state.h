@@ -1,6 +1,7 @@
 #pragma once
 
 #include <GLFW/glfw3.h>
+#include <vector>
 
 #include "math.h"
 
@@ -27,10 +28,18 @@ struct VehicleState {
   float speed = 0.0f;
 };
 
+struct Triangle2 {
+  Vec2 a;
+  Vec2 b;
+  Vec2 c;
+};
+
 struct GameState {
   VehicleState player;
   VehicleState police;
+  std::vector<Vec2> roadPoints;
+  std::vector<Triangle2> roadTriangles;
 };
 
 InputState ReadPlayerInput(GLFWwindow *window);
-void UpdatePlayer(VehicleState &player, const InputState &input, float dt, const MovementConfig &config, float headingOffset);
+void UpdatePlayer(VehicleState &player, const InputState &input, float dt, const MovementConfig &config, float headingOffset, float trackHalfExtent);

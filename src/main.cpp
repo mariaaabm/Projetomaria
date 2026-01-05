@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -54,13 +55,9 @@ struct ObjIndex {
   int vn = 0;
 };
 
-static bool gDragging = false;
-static double gLastX = 0.0;
-static double gLastY = 0.0;
-static float gYaw = 0.7f;
-static float gPitch = 0.12f;
-static float gDistance = 3.0f;
 static Vec3 gTarget = {0.0f, 0.0f, 0.0f};
+static Vec3 gCamPos = {0.0f, 0.0f, 0.0f};
+static bool gCamInitialized = false;
 
 static std::string Trim(const std::string &s) {
   size_t start = s.find_first_not_of(" \t\r\n");
@@ -79,6 +76,10 @@ static std::vector<std::string> SplitWhitespace(const std::string &s) {
     parts.push_back(part);
   }
   return parts;
+}
+
+static Vec3 Lerp(const Vec3 &a, const Vec3 &b, float t) {
+  return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t};
 }
 
 static int ResolveIndex(int idx, int size) {
@@ -127,6 +128,64 @@ static std::string Dirname(const std::string &path) {
     return "";
   }
   return path.substr(0, pos + 1);
+}
+
+static long long HashPoint(const Vec2 &p, float quantize) {
+  int ix = static_cast<int>(std::round(p.x * quantize));
+  int iy = static_cast<int>(std::round(p.y * quantize));
+  return (static_cast<long long>(ix) << 32) ^ static_cast<unsigned long long>(iy);
+}
+
+static void ExtractRoadPoints(const Model &model, float worldScale, std::vector<Vec2> &outPoints, std::vector<Triangle2> &outTriangles) {
+  // Drivable surface: Layer 1 and asphalt (Roads.png)
+  static const std::unordered_set<std::string> kRoadMaterials = {"Material.007", "Material.008"};
+  std::unordered_set<long long> seen;
+  const float quantize = 1000.0f;  // ~1mm at world units
+
+  for (const auto &mesh : model.meshes) {
+    if (kRoadMaterials.find(mesh.materialName) == kRoadMaterials.end()) {
+      continue;
+    }
+    const auto &verts = mesh.vertices;
+    for (size_t i = 0; i + 2 < verts.size(); i += 3) {
+      Vec3 p0 = verts[i].position * worldScale;
+      Vec3 p1 = verts[i + 1].position * worldScale;
+      Vec3 p2 = verts[i + 2].position * worldScale;
+      Vec2 pts[3] = {{p0.x, p0.z}, {p1.x, p1.z}, {p2.x, p2.z}};
+      outTriangles.push_back({pts[0], pts[1], pts[2]});
+      for (const auto &pt : pts) {
+        long long key = HashPoint(pt, quantize);
+        if (seen.insert(key).second) {
+          outPoints.push_back(pt);
+        }
+      }
+    }
+  }
+}
+
+static bool PointInTriangle(const Vec2 &p, const Triangle2 &t) {
+  auto sign = [](const Vec2 &p1, const Vec2 &p2, const Vec2 &p3) {
+    return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+  };
+  const float eps = 1e-4f;
+  float d1 = sign(p, t.a, t.b);
+  float d2 = sign(p, t.b, t.c);
+  float d3 = sign(p, t.c, t.a);
+  bool hasNeg = (d1 < -eps) || (d2 < -eps) || (d3 < -eps);
+  bool hasPos = (d1 > eps) || (d2 > eps) || (d3 > eps);
+  return !(hasNeg && hasPos);
+}
+
+static bool InsideRoad(const Vec2 &p, const std::vector<Triangle2> &tris) {
+  if (tris.empty()) {
+    return true;  // fallback to allow movement if road data missing
+  }
+  for (const auto &tri : tris) {
+    if (PointInTriangle(p, tri)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 static bool LoadMtl(const std::string &path, std::unordered_map<std::string, Material> &materials) {
@@ -379,56 +438,13 @@ static void SetupTextures(Model &model) {
   }
 }
 
-static void CursorPosCallback(GLFWwindow *, double xpos, double ypos) {
-  if (!gDragging) {
-    return;
-  }
-  float dx = static_cast<float>(xpos - gLastX);
-  float dy = static_cast<float>(ypos - gLastY);
-  gLastX = xpos;
-  gLastY = ypos;
+static void CursorPosCallback(GLFWwindow *, double, double) {}
 
-  gYaw += dx * 0.005f;
-  gPitch += dy * 0.005f;
-  gPitch = std::clamp(gPitch, 0.02f, 1.4f);
-}
+static void MouseButtonCallback(GLFWwindow *, int, int, int) {}
 
-static void MouseButtonCallback(GLFWwindow *window, int button, int action, int) {
-  if (button == GLFW_MOUSE_BUTTON_LEFT) {
-    if (action == GLFW_PRESS) {
-      gDragging = true;
-      glfwGetCursorPos(window, &gLastX, &gLastY);
-    } else if (action == GLFW_RELEASE) {
-      gDragging = false;
-    }
-  }
-}
+static void ScrollCallback(GLFWwindow *, double, double) {}
 
-static void ScrollCallback(GLFWwindow *, double, double yoffset) {
-  gDistance *= (1.0f - static_cast<float>(yoffset) * 0.1f);
-  gDistance = std::clamp(gDistance, 0.6f, 12.0f);
-}
-
-static void KeyCallback(GLFWwindow *, int key, int, int action, int) {
-  if (action != GLFW_PRESS && action != GLFW_REPEAT) {
-    return;
-  }
-
-  const float rotateSpeed = 0.08f;
-  const float zoomSpeed = 0.3f;
-
-  if (key == GLFW_KEY_UP) {
-    gPitch -= rotateSpeed;
-    gPitch = std::clamp(gPitch, 0.02f, 1.4f);
-  } else if (key == GLFW_KEY_DOWN) {
-    gPitch += rotateSpeed;
-    gPitch = std::clamp(gPitch, 0.02f, 1.4f);
-  } else if (key == GLFW_KEY_LEFT) {
-    gYaw += rotateSpeed;
-  } else if (key == GLFW_KEY_RIGHT) {
-    gYaw -= rotateSpeed;
-  }
-}
+static void KeyCallback(GLFWwindow *, int, int, int, int) {}
 
 int main() {
   if (!glfwInit()) {
@@ -528,8 +544,9 @@ int main() {
   GLint carLocUseTexture = glGetUniformLocation(carProgram, "uUseTexture");
 
   const float worldScale = 40.0f;
-  const float carScale = worldScale * 0.012f;
-  const float policeCarScale = worldScale * 0.016f;
+  const float trackHalfExtent = worldScale * 0.5f - 0.5f;
+  const float carScale = worldScale * 0.008f;
+  const float policeCarScale = worldScale * 0.012f;
   const float carBaseRotation = 3.1415926f / 2.0f;
   const float policeBaseRotation = 3.1415926f * 2.0f;
   float carLift = 0.02f * carScale;
@@ -538,10 +555,11 @@ int main() {
   GameState gameState;
   MovementConfig movementConfig;
   MovementConfig policeMovementConfig = movementConfig;
-  gameState.player.position = {0.0f, 0.0f, 0.0f};
+  gameState.player.position = {0.0f, 0.0f, -6.0f};
   gameState.player.heading = 0.0f;
-  gameState.police.position = {0.0f, 0.0f, -4.0f};
+  gameState.police.position = {0.0f, 0.0f, -8.0f};
   gameState.police.heading = 0.0f;
+  ExtractRoadPoints(trackModel, worldScale, gameState.roadPoints, gameState.roadTriangles);
 
   bool gameOver = false;
   const float catchDistance = 0.6f;
@@ -549,10 +567,6 @@ int main() {
 
   float startTime = static_cast<float>(glfwGetTime());
   float lastFrameTime = startTime;
-  gTarget = {0.0f, 0.0f, 0.0f};
-  gYaw = 3.1415926f;
-  gPitch = 0.12f;
-  gDistance = 8.0f;
 
   while (!glfwWindowShouldClose(window)) {
     float currentTime = static_cast<float>(glfwGetTime());
@@ -561,9 +575,19 @@ int main() {
     lastFrameTime = currentTime;
 
     if (!gameOver) {
+      Vec3 prevPlayerPos = gameState.player.position;
+      Vec3 prevPolicePos = gameState.police.position;
+
       InputState input = ReadPlayerInput(window);
-      UpdatePlayer(gameState.player, input, deltaTime, movementConfig, carBaseRotation);
-      UpdatePoliceChase(gameState.police, gameState.player, deltaTime, elapsedTime, policeStartDelay, policeMovementConfig);
+      UpdatePlayer(gameState.player, input, deltaTime, movementConfig, carBaseRotation, trackHalfExtent);
+      UpdatePoliceChase(gameState.police, gameState.player, deltaTime, elapsedTime, policeStartDelay, policeMovementConfig, trackHalfExtent);
+
+      if (!InsideRoad({gameState.player.position.x, gameState.player.position.z}, gameState.roadTriangles)) {
+        gameState.player.position = prevPlayerPos;
+      }
+      if (!InsideRoad({gameState.police.position.x, gameState.police.position.z}, gameState.roadTriangles)) {
+        gameState.police.position = prevPolicePos;
+      }
 
       if (CheckCaught(gameState.police, gameState.player, catchDistance)) {
         std::cout << "Game over, Mr. Bean got caught\n";
@@ -586,13 +610,27 @@ int main() {
         gameState.player.position.x,
         -carModel.minY * carScale + carLift + 0.05f,
         gameState.player.position.z};
-    gTarget = carPos;
-    
-    float camX = gTarget.x + gDistance * std::sin(gYaw) * std::cos(gPitch);
-    float camY = gTarget.y + gDistance * std::sin(gPitch);
-    float camZ = gTarget.z + gDistance * std::cos(gYaw) * std::cos(gPitch);
-    Vec3 eye = {camX, camY, camZ};
-    
+    // Third-person camera: always follow behind the car, aligned with heading
+    float backYaw = gameState.player.heading + carBaseRotation + 3.1415926f;  // alignment with model orientation
+    Vec3 backDir = {std::cos(backYaw), 0.0f, std::sin(backYaw)};
+    const float startDist = 3.5f;
+    const float startHeight = 1.6f;
+    const float followDist = 2.2f;
+    const float followHeight = 1.2f;
+
+    Vec3 desiredEye = carPos + backDir * followDist + Vec3{0.0f, followHeight, 0.0f};
+    if (!gCamInitialized) {
+      gCamPos = carPos + backDir * startDist + Vec3{0.0f, startHeight, 0.0f};
+      gCamInitialized = true;
+    } else {
+      float smooth = 1.0f - std::exp(-6.0f * deltaTime);  // quick but smooth follow
+      gCamPos = Lerp(gCamPos, desiredEye, smooth);
+      gCamPos.y = desiredEye.y;  // keep vertical offset fixed; only rotate in the horizontal plane
+    }
+    float groundY = -trackModel.minY * worldScale;
+    gCamPos.y = std::max(gCamPos.y, groundY + 0.5f);  // keep camera above track plane
+    Vec3 eye = gCamPos;
+
     Mat4 view = Mat4LookAt(eye, gTarget, {0.0f, 1.0f, 0.0f});
     Mat4 trackMat = Mat4Multiply(
         Mat4Translate({0.0f, -trackModel.minY * worldScale, 0.0f}),

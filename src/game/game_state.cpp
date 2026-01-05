@@ -13,7 +13,7 @@ InputState ReadPlayerInput(GLFWwindow *window) {
   return input;
 }
 
-void UpdatePlayer(VehicleState &player, const InputState &input, float dt, const MovementConfig &config, float headingOffset) {
+void UpdatePlayer(VehicleState &player, const InputState &input, float dt, const MovementConfig &config, float headingOffset, float trackHalfExtent) {
   float clampedDt = std::max(dt, 0.0f);
 
   float worldHeading = player.heading + headingOffset;
@@ -62,4 +62,6 @@ void UpdatePlayer(VehicleState &player, const InputState &input, float dt, const
 
   player.velocity = forwardDir * player.speed;
   player.position = player.position + player.velocity * clampedDt;
+  player.position.x = std::clamp(player.position.x, -trackHalfExtent, trackHalfExtent);
+  player.position.z = std::clamp(player.position.z, -trackHalfExtent, trackHalfExtent);
 }
