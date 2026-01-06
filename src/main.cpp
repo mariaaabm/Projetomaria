@@ -83,7 +83,8 @@ int main() {
   menuBounds.buttonMaxV = 0.25f;
   MenuUi menuUi;
   if (!InitMenuUi(menuUi, menuBounds, "src/menu/images/menu_inicial.png",
-                  "src/menu/images/menu_perder.png")) {
+                  "src/menu/images/menu_perder.png",
+                  "src/menu/images/menu_ganhar.png")) {
     glfwDestroyWindow(window);
     glfwTerminate();
     return 1;
@@ -127,9 +128,9 @@ int main() {
   }
 
   GLuint trackProgram =
-      CreateProgram("TrackVertexShader.glsl", "TrackFragmentShader.glsl");
+      CreateProgram("shaders/track_vertex.vs", "shaders/track_fragment.fs");
   GLuint carProgram =
-      CreateProgram("CarVertexShader.glsl", "CarFragmentShader.glsl");
+      CreateProgram("shaders/car_vertex.vs", "shaders/car_fragment.fs");
   if (!trackProgram || !carProgram) {
     glfwDestroyWindow(window);
     glfwTerminate();
@@ -179,14 +180,17 @@ int main() {
                     gameState.roadTriangles);
 
   bool gameOver = false;
+  bool playerWon = false;
   const float catchDistance = 0.3f;
   const float policeStartDelay = 1.0f;
+  const float winTime = 10.0f;
 
   float startTime = 0.0f;
   float lastFrameTime = 0.0f;
 
   auto resetGame = [&](float currentTime) {
     gameOver = false;
+    playerWon = false;
     gameState.player.position = {0.0f, 0.0f, -6.0f};
     gameState.player.heading = 0.0f;
     gameState.player.velocity = {0.0f, 0.0f, 0.0f};
@@ -232,6 +236,12 @@ int main() {
       if (CheckCaught(gameState.police, gameState.player, catchDistance)) {
         std::cout << "Game over, Mr. Bean got caught\n";
         gameOver = true;
+        gameState.player.velocity = {0.0f, 0.0f, 0.0f};
+        gameState.police.velocity = {0.0f, 0.0f, 0.0f};
+      } else if (elapsedTime >= winTime) {
+        std::cout << "Venceu! Sobreviveu por 10 segundos.\n";
+        gameOver = true;
+        playerWon = true;
         gameState.player.velocity = {0.0f, 0.0f, 0.0f};
         gameState.police.velocity = {0.0f, 0.0f, 0.0f};
       }
@@ -394,12 +404,17 @@ int main() {
                    static_cast<GLsizei>(mesh.vertices.size()));
     }
 
-    if (gameOver) {
+    if (gameOver && !playerWon) {
       LoseMenuResult loseResult = ShowLoseMenu(menuUi, window, width, height);
       if (loseResult.retry) {
         float now = static_cast<float>(glfwGetTime());
         resetGame(now);
       } else if (loseResult.quit) {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+      }
+    } else if (gameOver && playerWon) {
+      bool close = ShowWinScreen(menuUi, window, width, height);
+      if (close) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
       }
     }

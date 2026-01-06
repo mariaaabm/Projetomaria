@@ -7,10 +7,11 @@
 #include "gl_utils.h"
 
 bool InitMenuUi(MenuUi &menu, const MenuBounds &bounds,
-                const std::string &startImage, const std::string &loseImage) {
+                const std::string &startImage, const std::string &loseImage,
+                const std::string &winImage) {
   menu.bounds = bounds;
   menu.program =
-      CreateProgram("MenuVertexShader.glsl", "MenuFragmentShader.glsl");
+      CreateProgram("shaders/menu_vertex.vs", "shaders/menu_fragment.fs");
   if (!menu.program) {
     return false;
   }
@@ -38,6 +39,7 @@ bool InitMenuUi(MenuUi &menu, const MenuBounds &bounds,
 
   menu.startTexture = LoadTexture2D(startImage);
   menu.loseTexture = LoadTexture2D(loseImage);
+  menu.winTexture = LoadTexture2D(winImage);
   return menu.startTexture != 0;
 }
 
@@ -129,6 +131,37 @@ LoseMenuResult ShowLoseMenu(MenuUi &menu, GLFWwindow *window, int width,
   return result;
 }
 
+bool ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width, int height) {
+  if (!menu.winTexture) {
+    return false;
+  }
+
+  glDisable(GL_DEPTH_TEST);
+  glViewport(0, 0, width, height);
+  glUseProgram(menu.program);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, menu.winTexture);
+  glUniform1i(menu.locTexture, 0);
+  glBindVertexArray(menu.vao);
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  glEnable(GL_DEPTH_TEST);
+
+  double mouseX = 0.0;
+  double mouseY = 0.0;
+  glfwGetCursorPos(window, &mouseX, &mouseY);
+  int winW = 0;
+  int winH = 0;
+  glfwGetWindowSize(window, &winW, &winH);
+  bool mouseDown =
+      glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+  bool closeRequested = false;
+  if (mouseDown && !menu.wasMouseDownWin && winW > 0 && winH > 0) {
+    closeRequested = true; // qualquer clique fecha na vitória
+  }
+  menu.wasMouseDownWin = mouseDown;
+  return closeRequested;
+}
+
 void CleanupMenuUi(MenuUi &menu) {
   if (menu.startTexture) {
     glDeleteTextures(1, &menu.startTexture);
@@ -137,6 +170,10 @@ void CleanupMenuUi(MenuUi &menu) {
   if (menu.loseTexture) {
     glDeleteTextures(1, &menu.loseTexture);
     menu.loseTexture = 0;
+  }
+  if (menu.winTexture) {
+    glDeleteTextures(1, &menu.winTexture);
+    menu.winTexture = 0;
   }
   if (menu.vbo) {
     glDeleteBuffers(1, &menu.vbo);

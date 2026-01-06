@@ -26,8 +26,10 @@ struct MenuUi {
   GLuint vbo = 0;
   GLuint startTexture = 0;
   GLuint loseTexture = 0;
+  GLuint winTexture = 0;
   bool wasMouseDownStart = false;
   bool wasMouseDownLose = false;
+  bool wasMouseDownWin = false;
   MenuBounds bounds;
 };
 
@@ -37,8 +39,10 @@ struct LoseMenuResult {
 };
 
 bool InitMenuUi(MenuUi &menu, const MenuBounds &bounds,
-                const std::string &startImage, const std::string &loseImage);
+                const std::string &startImage, const std::string &loseImage,
+                const std::string &winImage);
 bool RunStartMenu(MenuUi &menu, GLFWwindow *window);
 LoseMenuResult ShowLoseMenu(MenuUi &menu, GLFWwindow *window, int width,
                             int height);
+bool ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width, int height);
 void CleanupMenuUi(MenuUi &menu);
