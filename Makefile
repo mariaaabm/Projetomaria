@@ -10,7 +10,7 @@ GLEW_LIBS := $(shell $(PKG_CONFIG) --libs glew 2>/dev/null)
 INCLUDES := -I./common -I./src
 LIBS := $(GLFW_LIBS) $(GLEW_LIBS) -lGL -ldl -pthread
 
-SRC := src/main.cpp src/assets/model.cpp src/game/game_state.cpp src/game/police.cpp src/game/collision.cpp src/game/road.cpp src/menu/menu.cpp
+SRC := src/main.cpp src/audio.cpp src/assets/model.cpp src/game/game_state.cpp src/game/police.cpp src/game/collision.cpp src/game/road.cpp src/menu/menu.cpp
 BIN := pista_viewer
 
 all: $(BIN)

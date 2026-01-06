@@ -15,7 +15,16 @@ float NormalizeAngle(float angle) {
   }
   return angle;
 }
+
+// Estado do "AI" persistente entre frames; resetado quando reiniciamos o jogo.
+float gStuckTimer = 0.0f;
+float gReverseTimer = 0.0f;
 } // namespace
+
+void ResetPoliceChaseState() {
+  gStuckTimer = 0.0f;
+  gReverseTimer = 0.0f;
+}
 
 void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
                        float dt, float elapsedSeconds, float startDelaySeconds,
@@ -23,13 +32,9 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
                        const std::vector<Vec3> &trail) {
   float clampedDt = std::max(dt, 0.0f);
 
-  // Stuck Detection State
-  static float stuckTimer = 0.0f;
-  static float reverseTimer = 0.0f;
-
   // Unstuck Mode (Reversing)
-  if (reverseTimer > 0.0f) {
-    reverseTimer -= clampedDt;
+  if (gReverseTimer > 0.0f) {
+    gReverseTimer -= clampedDt;
 
     // Reverse Action
     police.speed = std::max(police.speed - config.braking * clampedDt,
@@ -140,14 +145,14 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
   // Consider stuck if speed is very low AND we are not "done" (distance > 1.0)
   if (std::abs(police.speed) < 1.0f && distance > 1.5f &&
       elapsedSeconds > startDelaySeconds) {
-    stuckTimer += clampedDt;
+    gStuckTimer += clampedDt;
   } else {
-    stuckTimer = 0.0f;
+    gStuckTimer = 0.0f;
   }
 
   // Trigger Force Reverse if stuck for too long
-  if (stuckTimer > 1.5f) {
-    reverseTimer = 1.5f; // Reverse for 1.5 seconds
-    stuckTimer = 0.0f;
+  if (gStuckTimer > 1.5f) {
+    gReverseTimer = 1.5f; // Reverse for 1.5 seconds
+    gStuckTimer = 0.0f;
   }
 }

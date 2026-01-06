@@ -6,3 +6,6 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
                        float dt, float elapsedSeconds, float startDelaySeconds,
                        const MovementConfig &config, float trackHalfExtent,
                        const std::vector<Vec3> &trail);
+
+// Reinicia estado interno do perseguidor (timers de ficar preso).
+void ResetPoliceChaseState();

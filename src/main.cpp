@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "assets/model.h"
+#include "audio.h"
 #include "game/collision.h"
 #include "game/game_state.h"
 #include "game/police.h"
@@ -69,6 +70,11 @@ int main() {
 
   glEnable(GL_DEPTH_TEST);
   glClearColor(0.18f, 0.19f, 0.21f, 1.0f);
+
+  const char *musicPath = "src/music/Mr Bean Music.mp4";
+  if (!InitAudioEngine(musicPath)) {
+    std::cerr << "Falha ao iniciar áudio em loop: " << musicPath << "\n";
+  }
 
   MenuBounds menuBounds;
   menuBounds.playMinU = 0.55f; // area do botão na textura inicial
@@ -206,7 +212,7 @@ int main() {
   movementConfig.acceleration = 2.0f;  // Menor sensibilidade no W/S
   movementConfig.turnRate = 1.3f;      // Um pouco mais sensível no A/D
   MovementConfig policeMovementConfig; // Default maxSpeed 5.0f
-  policeMovementConfig.maxSpeed = 4.0f;
+  policeMovementConfig.maxSpeed = 4.5f;
   gameState.player.position = {0.0f, 0.0f, -6.0f};
   gameState.player.heading = 0.0f;
   gameState.police.position = {0.0f, 0.0f, -8.0f};
@@ -235,6 +241,7 @@ int main() {
     gameState.police.velocity = {0.0f, 0.0f, 0.0f};
     gameState.police.speed = 0.0f;
     gameState.playerTrail.clear();
+    ResetPoliceChaseState();
     startTime = currentTime;
     lastFrameTime = currentTime;
   };
@@ -582,6 +589,7 @@ int main() {
       inMenu = false;
     } else {
       CleanupMenuUi(menuUi);
+      ShutdownAudioEngine();
       glfwDestroyWindow(window);
       glfwTerminate();
       return 0;
@@ -616,6 +624,7 @@ int main() {
     glDeleteVertexArrays(1, &hudVao);
   }
 
+  ShutdownAudioEngine();
   glfwDestroyWindow(window);
   glfwTerminate();
   return 0;
