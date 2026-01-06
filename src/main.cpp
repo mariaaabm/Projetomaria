@@ -176,6 +176,7 @@ int main() {
   GLint trackLocLight = glGetUniformLocation(trackProgram, "uLightDir");
   GLint trackLocLight2 = glGetUniformLocation(trackProgram, "uLightDir2");
   GLint trackLocAmbient = glGetUniformLocation(trackProgram, "uAmbient");
+  GLint trackLocViewPos = glGetUniformLocation(trackProgram, "uViewPos");
   GLint trackLocTexture = glGetUniformLocation(trackProgram, "uTexture");
   GLint trackLocUseTexture = glGetUniformLocation(trackProgram, "uUseTexture");
 
@@ -186,6 +187,7 @@ int main() {
   GLint carLocLight = glGetUniformLocation(carProgram, "uLightDir");
   GLint carLocLight2 = glGetUniformLocation(carProgram, "uLightDir2");
   GLint carLocAmbient = glGetUniformLocation(carProgram, "uAmbient");
+  GLint carLocViewPos = glGetUniformLocation(carProgram, "uViewPos");
   GLint carLocTexture = glGetUniformLocation(carProgram, "uTexture");
   GLint carLocUseTexture = glGetUniformLocation(carProgram, "uUseTexture");
 
@@ -204,7 +206,7 @@ int main() {
   movementConfig.acceleration = 2.0f;  // Menor sensibilidade no W/S
   movementConfig.turnRate = 1.3f;      // Um pouco mais sensível no A/D
   MovementConfig policeMovementConfig; // Default maxSpeed 5.0f
-  policeMovementConfig.maxSpeed = 3.8f;
+  policeMovementConfig.maxSpeed = 4.0f;
   gameState.player.position = {0.0f, 0.0f, -6.0f};
   gameState.player.heading = 0.0f;
   gameState.police.position = {0.0f, 0.0f, -8.0f};
@@ -421,6 +423,7 @@ int main() {
     glUniform3f(trackLocLight, -0.6f, -1.0f, -0.3f);
     glUniform3f(trackLocLight2, 0.25f, -0.35f, 0.3f);
     glUniform3f(trackLocAmbient, 0.22f, 0.22f, 0.22f);
+    glUniform3f(trackLocViewPos, eye.x, eye.y, eye.z);
     glUniform1i(trackLocTexture, 0);
 
     for (const auto &mesh : trackModel.meshes) {
@@ -451,6 +454,7 @@ int main() {
     glUniform3f(carLocLight, -0.6f, -1.0f, -0.3f);
     glUniform3f(carLocLight2, 0.25f, -0.35f, 0.3f);
     glUniform3f(carLocAmbient, 0.22f, 0.22f, 0.22f);
+    glUniform3f(carLocViewPos, eye.x, eye.y, eye.z);
     glUniform1i(carLocTexture, 0);
 
     for (const auto &mesh : carModel.meshes) {
@@ -480,6 +484,7 @@ int main() {
     glUniformMatrix4fv(carLocProj, 1, GL_FALSE, proj.m);
     glUniform3f(carLocLight, -0.6f, -1.0f, -0.3f);
     glUniform3f(carLocAmbient, 0.22f, 0.22f, 0.22f);
+    glUniform3f(carLocViewPos, eye.x, eye.y, eye.z);
     glUniform1i(carLocTexture, 0);
 
     for (const auto &mesh : policeCarModel.meshes) {

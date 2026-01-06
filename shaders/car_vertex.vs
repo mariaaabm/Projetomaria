@@ -10,10 +10,12 @@ uniform mat4 uProj;
 
 out vec3 vNormal;
 out vec2 vTexCoord;
+out vec3 vWorldPos;
 
 void main() {
   vec4 worldPos = uModel * vec4(aPos, 1.0);
   vNormal = mat3(uModel) * aNormal;
   vTexCoord = aTexCoord;
+  vWorldPos = worldPos.xyz;
   gl_Position = uProj * uView * worldPos;
 }
