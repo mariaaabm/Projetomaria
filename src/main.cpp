@@ -3,9 +3,6 @@
 
 #include <algorithm>
 #include <iostream>
-#include <string>
-#include <vector>
-
 #include "assets/model.h"
 #include "audio.h"
 #include "game/collision.h"
@@ -29,14 +26,6 @@ static float SmoothStep01(float t) {
   return clamped * clamped * (3.0f - 2.0f * clamped);
 }
 
-static void CursorPosCallback(GLFWwindow *, double, double) {}
-
-static void MouseButtonCallback(GLFWwindow *, int, int, int) {}
-
-static void ScrollCallback(GLFWwindow *, double, double) {}
-
-static void KeyCallback(GLFWwindow *, int, int, int, int) {}
-
 int main() {
   if (!glfwInit()) {
     std::cerr << "Falha ao iniciar GLFW.\n";
@@ -55,10 +44,6 @@ int main() {
   }
 
   glfwMakeContextCurrent(window);
-  glfwSetCursorPosCallback(window, CursorPosCallback);
-  glfwSetMouseButtonCallback(window, MouseButtonCallback);
-  glfwSetScrollCallback(window, ScrollCallback);
-  glfwSetKeyCallback(window, KeyCallback);
 
   glewExperimental = GL_TRUE;
   if (glewInit() != GLEW_OK) {
@@ -202,7 +187,6 @@ int main() {
   const float carScale = worldScale * 0.005f;
   const float policeCarScale = worldScale * 0.0075f;
   const float carBaseRotation = 3.1415926f / 2.0f;
-  const float policeBaseRotation = 3.1415926f / 2.0f; // Mesmo que o carro do jogador
   float carLift = 0.02f * carScale;
   float policeLift = 0.02f * policeCarScale;
 
@@ -424,7 +408,7 @@ int main() {
                      Mat4Scale(carScale)));
     Mat4 policeCarMat = Mat4Multiply(
         Mat4Translate(policePos),
-        Mat4Multiply(Mat4RotateY(gameState.police.heading + policeBaseRotation),
+        Mat4Multiply(Mat4RotateY(gameState.police.heading + carBaseRotation),
                      Mat4Scale(policeCarScale)));
 
     glUseProgram(trackProgram);
@@ -489,7 +473,6 @@ int main() {
                    static_cast<GLsizei>(mesh.vertices.size()));
     }
 
-    glUseProgram(carProgram);
     glUniformMatrix4fv(carLocModel, 1, GL_FALSE, policeCarMat.m);
     glUniformMatrix4fv(carLocView, 1, GL_FALSE, view.m);
     glUniformMatrix4fv(carLocProj, 1, GL_FALSE, proj.m);
@@ -582,15 +565,12 @@ int main() {
     glfwPollEvents();
   };
 
-  bool inMenu = (menuUi.startTexture != 0);
-  if (inMenu) {
+  if (menuUi.startTexture != 0) {
     bool started = RunStartMenu(menuUi, window);
     if (started) {
       glfwSetTime(0.0);
       startTime = static_cast<float>(glfwGetTime());
       lastFrameTime = startTime;
-      renderFrame(startTime); // desenha o primeiro frame antes de sair
-      inMenu = false;
     } else {
       CleanupMenuUi(menuUi);
       ShutdownAudioEngine();
