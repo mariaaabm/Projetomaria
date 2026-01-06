@@ -71,7 +71,7 @@ int main() {
   glEnable(GL_DEPTH_TEST);
   glClearColor(0.18f, 0.19f, 0.21f, 1.0f);
 
-  const char *musicPath = "src/music/Mr Bean Music.mp4";
+  const char *musicPath = "src/music/Mr Bean Music.mp3";
   if (!InitAudioEngine(musicPath)) {
     std::cerr << "Falha ao iniciar áudio em loop: " << musicPath << "\n";
   }
@@ -202,7 +202,7 @@ int main() {
   const float carScale = worldScale * 0.005f;
   const float policeCarScale = worldScale * 0.0075f;
   const float carBaseRotation = 3.1415926f / 2.0f;
-  const float policeBaseRotation = 3.1415926f * 2.0f;
+  const float policeBaseRotation = 3.1415926f / 2.0f; // Mesmo que o carro do jogador
   float carLift = 0.02f * carScale;
   float policeLift = 0.02f * policeCarScale;
 
@@ -211,8 +211,12 @@ int main() {
   movementConfig.maxSpeed = 3.3f;      // Slower player
   movementConfig.acceleration = 2.0f;  // Menor sensibilidade no W/S
   movementConfig.turnRate = 1.3f;      // Um pouco mais sensível no A/D
-  MovementConfig policeMovementConfig; // Default maxSpeed 5.0f
+  MovementConfig policeMovementConfig;
   policeMovementConfig.maxSpeed = 4.5f;
+  policeMovementConfig.acceleration = 5.0f; // Mais aceleração que o jogador
+  policeMovementConfig.drag = 1.5f;
+  policeMovementConfig.braking = 30.0f;
+  policeMovementConfig.turnRate = 2.2f; // Melhor manobrabilidade
   gameState.player.position = {0.0f, 0.0f, -6.0f};
   gameState.player.heading = 0.0f;
   gameState.police.position = {0.0f, 0.0f, -8.0f};
@@ -223,7 +227,7 @@ int main() {
   bool gameOver = false;
   bool playerWon = false;
   const float catchDistance = 0.3f;
-  const float policeStartDelay = 1.0f;
+  const float policeStartDelay = 0.0f; // Começa imediatamente
   const float winTime = 30.0f;
 
   float startTime = 0.0f;
