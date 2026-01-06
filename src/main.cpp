@@ -75,12 +75,20 @@ int main() {
   menuBounds.playMaxU = 0.93f;
   menuBounds.playMinV = 0.13f;
   menuBounds.playMaxV = 0.29f;
+
   menuBounds.tryMinU = 0.18f;
   menuBounds.tryMaxU = 0.50f;
   menuBounds.exitMinU = 0.52f;
   menuBounds.exitMaxU = 0.82f;
   menuBounds.buttonMinV = 0.12f;
   menuBounds.buttonMaxV = 0.25f;
+  // Hotspots do menu de vitoria (ajustar se a arte mudar)
+  menuBounds.winMenuMinU = 0.18f;
+  menuBounds.winMenuMaxU = 0.50f;
+  menuBounds.winExitMinU = 0.51f;
+  menuBounds.winExitMaxU = 0.82f;
+  menuBounds.winButtonMinV = 0.12f;
+  menuBounds.winButtonMaxV = 0.25f;
   MenuUi menuUi;
   if (!InitMenuUi(menuUi, menuBounds, "src/menu/images/menu_inicial.png",
                   "src/menu/images/menu_perder.png",
@@ -413,8 +421,23 @@ int main() {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
       }
     } else if (gameOver && playerWon) {
-      bool close = ShowWinScreen(menuUi, window, width, height);
-      if (close) {
+      WinMenuResult winResult = ShowWinScreen(menuUi, window, width, height);
+      if (winResult.goToMenu) {
+        // sinalizar retorno ao menu principal
+        gameOver = false;
+        playerWon = false;
+        resetGame(static_cast<float>(glfwGetTime()));
+        glfwSetTime(0.0);
+        startTime = static_cast<float>(glfwGetTime());
+        lastFrameTime = startTime;
+        bool started = RunStartMenu(menuUi, window);
+        if (!started) {
+          glfwSetWindowShouldClose(window, GLFW_TRUE);
+        } else {
+          startTime = static_cast<float>(glfwGetTime());
+          lastFrameTime = startTime;
+        }
+      } else if (winResult.quit) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
       }
     }

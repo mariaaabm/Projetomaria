@@ -131,9 +131,11 @@ LoseMenuResult ShowLoseMenu(MenuUi &menu, GLFWwindow *window, int width,
   return result;
 }
 
-bool ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width, int height) {
+WinMenuResult ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width,
+                            int height) {
+  WinMenuResult result;
   if (!menu.winTexture) {
-    return false;
+    return result;
   }
 
   glDisable(GL_DEPTH_TEST);
@@ -144,7 +146,6 @@ bool ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width, int height) {
   glUniform1i(menu.locTexture, 0);
   glBindVertexArray(menu.vao);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-  glEnable(GL_DEPTH_TEST);
 
   double mouseX = 0.0;
   double mouseY = 0.0;
@@ -154,12 +155,20 @@ bool ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width, int height) {
   glfwGetWindowSize(window, &winW, &winH);
   bool mouseDown =
       glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-  bool closeRequested = false;
   if (mouseDown && !menu.wasMouseDownWin && winW > 0 && winH > 0) {
-    closeRequested = true; // qualquer clique fecha na vitória
+    float u = static_cast<float>(mouseX) / static_cast<float>(winW);
+    float v = 1.0f - static_cast<float>(mouseY) / static_cast<float>(winH);
+    if (u >= menu.bounds.winMenuMinU && u <= menu.bounds.winMenuMaxU &&
+        v >= menu.bounds.winButtonMinV && v <= menu.bounds.winButtonMaxV) {
+      result.goToMenu = true;
+    } else if (u >= menu.bounds.winExitMinU && u <= menu.bounds.winExitMaxU &&
+               v >= menu.bounds.winButtonMinV &&
+               v <= menu.bounds.winButtonMaxV) {
+      result.quit = true;
+    }
   }
   menu.wasMouseDownWin = mouseDown;
-  return closeRequested;
+  return result;
 }
 
 void CleanupMenuUi(MenuUi &menu) {

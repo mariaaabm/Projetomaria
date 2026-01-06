@@ -17,6 +17,13 @@ struct MenuBounds {
   float exitMaxU = 1.0f;
   float buttonMinV = 0.0f;
   float buttonMaxV = 1.0f;
+
+  float winMenuMinU = 0.0f;
+  float winMenuMaxU = 1.0f;
+  float winExitMinU = 0.0f;
+  float winExitMaxU = 1.0f;
+  float winButtonMinV = 0.0f;
+  float winButtonMaxV = 1.0f;
 };
 
 struct MenuUi {
@@ -38,11 +45,17 @@ struct LoseMenuResult {
   bool quit = false;
 };
 
+struct WinMenuResult {
+  bool goToMenu = false;
+  bool quit = false;
+};
+
 bool InitMenuUi(MenuUi &menu, const MenuBounds &bounds,
                 const std::string &startImage, const std::string &loseImage,
                 const std::string &winImage);
 bool RunStartMenu(MenuUi &menu, GLFWwindow *window);
 LoseMenuResult ShowLoseMenu(MenuUi &menu, GLFWwindow *window, int width,
                             int height);
-bool ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width, int height);
+WinMenuResult ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width,
+                            int height);
 void CleanupMenuUi(MenuUi &menu);
