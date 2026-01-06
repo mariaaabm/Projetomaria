@@ -135,6 +135,30 @@ int main() {
     SetupMesh(mesh);
   }
 
+  GLuint hudTexture = 0;
+  glGenTextures(1, &hudTexture);
+  glBindTexture(GL_TEXTURE_2D, hudTexture);
+  unsigned int whitePixel = 0xffffffff;
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+               &whitePixel);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+  GLuint hudVao = 0;
+  GLuint hudVbo = 0;
+  glGenVertexArrays(1, &hudVao);
+  glGenBuffers(1, &hudVbo);
+  glBindVertexArray(hudVao);
+  glBindBuffer(GL_ARRAY_BUFFER, hudVbo);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 16, nullptr, GL_DYNAMIC_DRAW);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4,
+                        (void *)0);
+  glEnableVertexAttribArray(1);
+  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4,
+                        (void *)(sizeof(float) * 2));
+  glBindVertexArray(0);
+
   GLuint trackProgram =
       CreateProgram("shaders/track_vertex.vs", "shaders/track_fragment.fs");
   GLuint carProgram =
@@ -176,10 +200,11 @@ int main() {
 
   GameState gameState;
   MovementConfig movementConfig;
-  movementConfig.maxSpeed = 2.8f;      // Slower player
+  movementConfig.maxSpeed = 3.3f;      // Slower player
   movementConfig.acceleration = 2.0f;  // Menor sensibilidade no W/S
-  movementConfig.turnRate = 1.0f;      // Menor sensibilidade no A/D
+  movementConfig.turnRate = 1.3f;      // Um pouco mais sensível no A/D
   MovementConfig policeMovementConfig; // Default maxSpeed 5.0f
+  policeMovementConfig.maxSpeed = 3.8f;
   gameState.player.position = {0.0f, 0.0f, -6.0f};
   gameState.player.heading = 0.0f;
   gameState.police.position = {0.0f, 0.0f, -8.0f};
@@ -191,7 +216,7 @@ int main() {
   bool playerWon = false;
   const float catchDistance = 0.3f;
   const float policeStartDelay = 1.0f;
-  const float winTime = 10.0f;
+  const float winTime = 30.0f;
 
   float startTime = 0.0f;
   float lastFrameTime = 0.0f;
@@ -216,6 +241,13 @@ int main() {
     float deltaTime = currentTime - lastFrameTime;
     float elapsedTime = currentTime - startTime;
     lastFrameTime = currentTime;
+    float remaining = std::max(0.0f, winTime - elapsedTime);
+    {
+      char title[128];
+      std::snprintf(title, sizeof(title), "Pista - Tempo restante: %.1fs",
+                    remaining);
+      glfwSetWindowTitle(window, title);
+    }
 
     if (!gameOver) {
       Vec3 prevPlayerPos = gameState.player.position;
@@ -228,13 +260,72 @@ int main() {
                         elapsedTime, policeStartDelay, policeMovementConfig,
                         trackHalfExtent, gameState.playerTrail);
 
-      if (!InsideRoad(
-              {gameState.player.position.x, gameState.player.position.z},
-              gameState.roadTriangles)) {
-        gameState.player.position = prevPlayerPos;
-        gameState.player.velocity = {0.0f, 0.0f, 0.0f};
-        gameState.player.speed = 0.0f;
-      }
+      auto trySlideOnRoad = [&](Vec3 prevPos, Vec3 &pos, VehicleState &state) {
+        Vec2 pos2 = {pos.x, pos.z};
+        if (InsideRoad(pos2, gameState.roadTriangles)) {
+          return;
+        }
+
+        Vec3 moveDir = pos - prevPos;
+        float moveLen = Length(moveDir);
+
+        // Passo 1: recuar na direção oposta ao movimento para tentar voltar à estrada.
+        if (moveLen > 0.0001f) {
+          Vec3 push = moveDir / moveLen * std::min(1.0f, moveLen * 0.9f);
+          Vec3 backedPos = pos - push;
+          if (InsideRoad({backedPos.x, backedPos.z},
+                         gameState.roadTriangles)) {
+            pos = backedPos;
+            float sign = (state.speed >= 0.0f) ? 1.0f : -1.0f;
+            float mag = std::max(std::abs(state.speed) * 0.65f, 0.8f);
+            state.speed = sign * mag;
+            state.velocity = {state.velocity.x * 0.65f, 0.0f,
+                              state.velocity.z * 0.65f};
+            return;
+          }
+        }
+
+        // Tentar movimentar apenas num eixo para permitir "raspar" na parede.
+        Vec3 slideX = {pos.x, prevPos.y, prevPos.z};
+        Vec3 slideZ = {prevPos.x, prevPos.y, pos.z};
+        bool fixed = false;
+        if (InsideRoad({slideX.x, slideX.z}, gameState.roadTriangles)) {
+          pos = slideX;
+          fixed = true;
+        } else if (InsideRoad({slideZ.x, slideZ.z}, gameState.roadTriangles)) {
+          pos = slideZ;
+          fixed = true;
+        }
+
+        if (fixed) {
+          // Mantém velocidade mas abafa um pouco para simular fricção na parede.
+          float sign = (state.speed >= 0.0f) ? 1.0f : -1.0f;
+          float mag = std::max(std::abs(state.speed) * 0.8f, 0.6f);
+          state.speed = sign * mag;
+          state.velocity = {state.velocity.x * 0.8f, 0.0f,
+                            state.velocity.z * 0.8f};
+        } else {
+          pos = prevPos;
+          // Impulso curto para trás seguindo a direção do movimento/heading.
+          Vec3 dir = moveDir;
+          if (Length(dir) < 0.0001f) {
+            dir = state.velocity;
+          }
+          if (Length(dir) < 0.0001f) {
+            dir = {-std::cos(state.heading), 0.0f, -std::sin(state.heading)};
+          }
+          dir = Normalize(dir) * -1.0f;
+          float pushBack = 1.5f;
+          state.speed = -pushBack;
+          state.velocity = dir * pushBack;
+        }
+      };
+
+      trySlideOnRoad(prevPlayerPos, gameState.player.position,
+                     gameState.player);
+      trySlideOnRoad(prevPolicePos, gameState.police.position,
+                     gameState.police);
+
       if (!InsideRoad(
               {gameState.police.position.x, gameState.police.position.z},
               gameState.roadTriangles)) {
@@ -442,6 +533,35 @@ int main() {
       }
     }
 
+    // HUD: barra de contagem decrescente no canto superior esquerdo
+    if (!gameOver) {
+      float tNorm = (winTime > 0.0f) ? (remaining / winTime) : 0.0f;
+      tNorm = std::clamp(tNorm, 0.0f, 1.0f);
+      float padding = 0.02f;
+      float barWidth = 0.35f;
+      float barHeight = 0.04f;
+      float x0 = -1.0f + padding * 2.0f;
+      float y0 = 1.0f - padding;
+      float x1 = x0 + barWidth * tNorm * 2.0f; // NDC width scaled
+      float y1 = y0 - barHeight * 2.0f;
+      float verts[] = {
+          x0, y0, 0.0f, 1.0f, //
+          x1, y0, 1.0f, 1.0f, //
+          x0, y1, 0.0f, 0.0f, //
+          x1, y1, 1.0f, 0.0f  //
+      };
+      glDisable(GL_DEPTH_TEST);
+      glUseProgram(menuUi.program);
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, hudTexture);
+      glUniform1i(menuUi.locTexture, 0);
+      glBindVertexArray(hudVao);
+      glBindBuffer(GL_ARRAY_BUFFER, hudVbo);
+      glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(verts), verts);
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+      glEnable(GL_DEPTH_TEST);
+    }
+
     glfwSwapBuffers(window);
     glfwPollEvents();
   };
@@ -481,6 +601,15 @@ int main() {
   CleanupModel(carModel);
   CleanupModel(policeCarModel);
   CleanupMenuUi(menuUi);
+  if (hudTexture) {
+    glDeleteTextures(1, &hudTexture);
+  }
+  if (hudVbo) {
+    glDeleteBuffers(1, &hudVbo);
+  }
+  if (hudVao) {
+    glDeleteVertexArrays(1, &hudVao);
+  }
 
   glfwDestroyWindow(window);
   glfwTerminate();
