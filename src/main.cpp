@@ -129,6 +129,19 @@ static long long HashPoint(const Vec2 &p, float quantize) {
          static_cast<unsigned long long>(iy);
 }
 
+static float LerpFloat(float a, float b, float t) { return a + (b - a) * t; }
+
+static Vec3 LerpVec3(const Vec3 &a, const Vec3 &b, float t) {
+  float clamped = std::clamp(t, 0.0f, 1.0f);
+  return {LerpFloat(a.x, b.x, clamped), LerpFloat(a.y, b.y, clamped),
+          LerpFloat(a.z, b.z, clamped)};
+}
+
+static float SmoothStep01(float t) {
+  float clamped = std::clamp(t, 0.0f, 1.0f);
+  return clamped * clamped * (3.0f - 2.0f * clamped);
+}
+
 static void ExtractRoadPoints(const Model &model, float worldScale,
                               std::vector<Vec2> &outPoints,
                               std::vector<Triangle2> &outTriangles) {
@@ -496,6 +509,54 @@ int main() {
   glEnable(GL_DEPTH_TEST);
   glClearColor(0.18f, 0.19f, 0.21f, 1.0f);
 
+  GLuint menuProgram =
+      CreateProgram("MenuVertexShader.glsl", "MenuFragmentShader.glsl");
+  if (!menuProgram) {
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return 1;
+  }
+
+  GLint menuLocTexture = glGetUniformLocation(menuProgram, "uTexture");
+
+  GLuint menuTexture = LoadTexture2D("src/menu/images/menu_inicial.png");
+  GLuint loseTexture = LoadTexture2D("src/menu/images/menu_perder.png");
+  const float playMinU = 0.55f; // ajuste para a área do botão na textura
+  const float playMaxU = 0.93f;
+  const float playMinV = 0.13f; // alinhado com o botão azul em baixo
+  const float playMaxV = 0.29f;
+
+  GLuint menuVao = 0;
+  GLuint menuVbo = 0;
+  {
+    float quad[] = {
+        -1.0f, -1.0f, 0.0f, 0.0f, //
+        1.0f,  -1.0f, 1.0f, 0.0f, //
+        -1.0f, 1.0f,  0.0f, 1.0f, //
+        1.0f,  1.0f,  1.0f, 1.0f  //
+    };
+    glGenVertexArrays(1, &menuVao);
+    glGenBuffers(1, &menuVbo);
+    glBindVertexArray(menuVao);
+    glBindBuffer(GL_ARRAY_BUFFER, menuVbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4,
+                          (void *)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4,
+                          (void *)(sizeof(float) * 2));
+    glBindVertexArray(0);
+  }
+
+  // Hotspots para o ecrã de derrota (ajustar conforme a arte)
+  const float tryMinU = 0.18f;
+  const float tryMaxU = 0.50f;
+  const float exitMinU = 0.52f;
+  const float exitMaxU = 0.82f;
+  const float buttonMinV = 0.12f;
+  const float buttonMaxV = 0.25f;
+
   Model trackModel;
   if (!LoadObj("assets/textures/pista/pista.obj", trackModel)) {
     glfwDestroyWindow(window);
@@ -574,7 +635,9 @@ int main() {
 
   GameState gameState;
   MovementConfig movementConfig;
-  movementConfig.maxSpeed = 4.0f;      // Slower player
+  movementConfig.maxSpeed = 2.8f;      // Slower player
+  movementConfig.acceleration = 2.0f;  // Menor sensibilidade no W/S
+  movementConfig.turnRate = 1.0f;      // Menor sensibilidade no A/D
   MovementConfig policeMovementConfig; // Default maxSpeed 5.0f
   gameState.player.position = {0.0f, 0.0f, -6.0f};
   gameState.player.heading = 0.0f;
@@ -587,11 +650,27 @@ int main() {
   const float catchDistance = 0.3f;
   const float policeStartDelay = 1.0f;
 
-  float startTime = static_cast<float>(glfwGetTime());
-  float lastFrameTime = startTime;
+  float startTime = 0.0f;
+  float lastFrameTime = 0.0f;
+  bool wasMouseDownMenu = false;
+  bool wasMouseDownLose = false;
 
-  while (!glfwWindowShouldClose(window)) {
-    float currentTime = static_cast<float>(glfwGetTime());
+  auto resetGame = [&](float currentTime) {
+    gameOver = false;
+    gameState.player.position = {0.0f, 0.0f, -6.0f};
+    gameState.player.heading = 0.0f;
+    gameState.player.velocity = {0.0f, 0.0f, 0.0f};
+    gameState.player.speed = 0.0f;
+    gameState.police.position = {0.0f, 0.0f, -8.0f};
+    gameState.police.heading = 0.0f;
+    gameState.police.velocity = {0.0f, 0.0f, 0.0f};
+    gameState.police.speed = 0.0f;
+    gameState.playerTrail.clear();
+    startTime = currentTime;
+    lastFrameTime = currentTime;
+  };
+
+  auto renderFrame = [&](float currentTime) {
     float deltaTime = currentTime - lastFrameTime;
     float elapsedTime = currentTime - startTime;
     lastFrameTime = currentTime;
@@ -641,16 +720,48 @@ int main() {
     Vec3 carPos = {gameState.player.position.x,
                    -carModel.minY * carScale + carLift + 0.05f,
                    gameState.player.position.z};
+    Vec3 policePos = {gameState.police.position.x,
+                      -policeCarModel.minY * policeCarScale + policeLift +
+                          0.05f,
+                      gameState.police.position.z};
     float backYaw = gameState.player.heading + carBaseRotation + 3.1415926f;
     Vec3 backDir = {std::cos(backYaw), 0.0f, std::sin(backYaw)};
-    const float followDist = 3.5f;
-    const float followHeight = 1.6f;
-    const float targetHeight = 0.8f;
-    Vec3 eye = carPos + backDir * followDist + Vec3{0.0f, followHeight, 0.0f};
-    Vec3 target = carPos + Vec3{0.0f, targetHeight, 0.0f};
+    const float followDist = 0.95f; // Extra-close chase view
+    const float followHeightBase = 0.6f;
+    const float targetHeightBase = 0.45f;
+    const float followHeightLow = 0.1f; // Drop even closer to road
+    const float targetHeightLow = 0.08f;
+    const float introOverviewDuration = 1.5f;
+    const float introBlendDuration = 2.0f;
+    float lowerBlend = 0.0f;
+    if (elapsedTime > introOverviewDuration + introBlendDuration) {
+      float t = (elapsedTime - (introOverviewDuration + introBlendDuration)) /
+                1.2f; // drop height after zoom finishes
+      lowerBlend = SmoothStep01(t);
+    }
+    float followHeight =
+        LerpFloat(followHeightBase, followHeightLow, lowerBlend);
+    float targetHeight =
+        LerpFloat(targetHeightBase, targetHeightLow, lowerBlend);
+
+    Vec3 chaseEye =
+        carPos + backDir * followDist + Vec3{0.0f, followHeight, 0.0f};
+    Vec3 chaseTarget = carPos + Vec3{0.0f, targetHeight, 0.0f};
+    Vec3 pairCenter = (carPos + policePos) * 0.5f;
+    Vec3 overviewEye = pairCenter + Vec3{0.0f, 8.0f, 0.0f};
+    Vec3 overviewTarget = pairCenter + Vec3{0.0f, 0.5f, 0.0f};
+    float camBlend = 1.0f;
+    if (elapsedTime < introOverviewDuration) {
+      camBlend = 0.0f;
+    } else if (elapsedTime < introOverviewDuration + introBlendDuration) {
+      float t = (elapsedTime - introOverviewDuration) / introBlendDuration;
+      camBlend = SmoothStep01(t);
+    }
+    Vec3 eye = LerpVec3(overviewEye, chaseEye, camBlend);
+    Vec3 target = LerpVec3(overviewTarget, chaseTarget, camBlend);
     float groundY = -trackModel.minY * worldScale;
-    eye.y = std::max(eye.y, groundY + 1.0f);
-    target.y = std::max(target.y, groundY + 0.5f);
+    eye.y = std::max(eye.y, groundY + 0.45f);
+    target.y = std::max(target.y, groundY + 0.22f);
     Mat4 view = Mat4LookAt(eye, target, {0.0f, 1.0f, 0.0f});
     Mat4 trackMat =
         Mat4Multiply(Mat4Translate({0.0f, -trackModel.minY * worldScale, 0.0f}),
@@ -659,11 +770,6 @@ int main() {
         Mat4Translate(carPos),
         Mat4Multiply(Mat4RotateY(gameState.player.heading + carBaseRotation),
                      Mat4Scale(carScale)));
-
-    Vec3 policePos = {gameState.police.position.x,
-                      -policeCarModel.minY * policeCarScale + policeLift +
-                          0.05f,
-                      gameState.police.position.z};
     Mat4 policeCarMat = Mat4Multiply(
         Mat4Translate(policePos),
         Mat4Multiply(Mat4RotateY(gameState.police.heading + policeBaseRotation),
@@ -695,7 +801,8 @@ int main() {
         glUniform1i(trackLocUseTexture, 0);
       }
       glBindVertexArray(mesh.vao);
-      glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.vertices.size()));
+      glDrawArrays(GL_TRIANGLES, 0,
+                   static_cast<GLsizei>(mesh.vertices.size()));
     }
 
     glUseProgram(carProgram);
@@ -724,7 +831,8 @@ int main() {
         glUniform1i(carLocUseTexture, 0);
       }
       glBindVertexArray(mesh.vao);
-      glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.vertices.size()));
+      glDrawArrays(GL_TRIANGLES, 0,
+                   static_cast<GLsizei>(mesh.vertices.size()));
     }
 
     glUseProgram(carProgram);
@@ -752,13 +860,109 @@ int main() {
         glUniform1i(carLocUseTexture, 0);
       }
       glBindVertexArray(mesh.vao);
-      glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.vertices.size()));
+      glDrawArrays(GL_TRIANGLES, 0,
+                   static_cast<GLsizei>(mesh.vertices.size()));
+    }
+
+    if (gameOver && loseTexture) {
+      glDisable(GL_DEPTH_TEST);
+      glViewport(0, 0, width, height);
+      glUseProgram(menuProgram);
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, loseTexture);
+      glUniform1i(menuLocTexture, 0);
+      glBindVertexArray(menuVao);
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+      glEnable(GL_DEPTH_TEST);
     }
 
     glfwSwapBuffers(window);
     glfwPollEvents();
+
+    if (gameOver) {
+      double mouseX = 0.0;
+      double mouseY = 0.0;
+      glfwGetCursorPos(window, &mouseX, &mouseY);
+      int winW = 0;
+      int winH = 0;
+      glfwGetWindowSize(window, &winW, &winH);
+      bool mouseDown =
+          glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+      if (mouseDown && !wasMouseDownLose && winW > 0 && winH > 0) {
+        float u = static_cast<float>(mouseX) / static_cast<float>(winW);
+        float v = 1.0f - static_cast<float>(mouseY) / static_cast<float>(winH);
+        if (u >= tryMinU && u <= tryMaxU && v >= buttonMinV &&
+            v <= buttonMaxV) {
+          float now = static_cast<float>(glfwGetTime());
+          resetGame(now);
+        } else if (u >= exitMinU && u <= exitMaxU && v >= buttonMinV &&
+                   v <= buttonMaxV) {
+          glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+      }
+      wasMouseDownLose = mouseDown;
+    }
+  };
+
+  bool inMenu = (menuTexture != 0);
+  if (inMenu) {
+    glDisable(GL_DEPTH_TEST);
+    while (!glfwWindowShouldClose(window) && inMenu) {
+      int fbWidth = 0;
+      int fbHeight = 0;
+      glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+      glViewport(0, 0, fbWidth, fbHeight);
+      glClear(GL_COLOR_BUFFER_BIT);
+
+      glUseProgram(menuProgram);
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, menuTexture);
+      glUniform1i(menuLocTexture, 0);
+      glBindVertexArray(menuVao);
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+      glfwSwapBuffers(window);
+      glfwPollEvents();
+
+      double mouseX = 0.0;
+      double mouseY = 0.0;
+      glfwGetCursorPos(window, &mouseX, &mouseY);
+      int winW = 0;
+      int winH = 0;
+      glfwGetWindowSize(window, &winW, &winH);
+      bool mouseDown =
+          glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+      if (mouseDown && !wasMouseDownMenu && winW > 0 && winH > 0) {
+        float u = static_cast<float>(mouseX) / static_cast<float>(winW);
+        float v = 1.0f - static_cast<float>(mouseY) / static_cast<float>(winH);
+        if (u >= playMinU && u <= playMaxU && v >= playMinV && v <= playMaxV) {
+          glfwSetTime(0.0);
+          startTime = static_cast<float>(glfwGetTime());
+          lastFrameTime = startTime;
+          glEnable(GL_DEPTH_TEST);
+          renderFrame(startTime); // desenha o primeiro frame antes de sair
+          inMenu = false;
+          break;
+        }
+      }
+      wasMouseDownMenu = mouseDown;
+    }
+    glEnable(GL_DEPTH_TEST);
   }
 
+  if (lastFrameTime == 0.0f) {
+    glfwSetTime(0.0);
+    startTime = static_cast<float>(glfwGetTime());
+    lastFrameTime = startTime;
+  }
+  // Render imediatamente após sair do menu para evitar frame vazio
+  renderFrame(startTime);
+  while (!glfwWindowShouldClose(window)) {
+    float currentTime = static_cast<float>(glfwGetTime());
+    renderFrame(currentTime);
+  }
+
+  glDeleteProgram(menuProgram);
   glDeleteProgram(trackProgram);
   glDeleteProgram(carProgram);
   for (auto &mesh : trackModel.meshes) {
@@ -799,6 +1003,18 @@ int main() {
     if (entry.second.textureId) {
       glDeleteTextures(1, &entry.second.textureId);
     }
+  }
+  if (menuTexture) {
+    glDeleteTextures(1, &menuTexture);
+  }
+  if (loseTexture) {
+    glDeleteTextures(1, &loseTexture);
+  }
+  if (menuVbo) {
+    glDeleteBuffers(1, &menuVbo);
+  }
+  if (menuVao) {
+    glDeleteVertexArrays(1, &menuVao);
   }
 
   glfwDestroyWindow(window);
