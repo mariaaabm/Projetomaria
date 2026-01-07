@@ -65,7 +65,7 @@ void UpdatePlayer(VehicleState &player, const InputState &input, float dt,
   float maxReverse = -config.maxSpeed * 0.5f;
   player.speed = std::clamp(player.speed, maxReverse, config.maxSpeed);
 
-  // Direção (steering)
+  // Direção 
   float steerInput = 0.0f;
   if (input.left) {
     steerInput -= 1.0f;

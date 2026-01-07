@@ -13,8 +13,10 @@
 #include "math.h"
 #include "menu/menu.h"
 
+// função para fazer uma transição linear suave entre dois valores float- usada em altura, distancias e velocidades
 static float LerpFloat(float a, float b, float t) { return a + (b - a) * t; }
 
+//função para fazer uma transição suave entre duas posições 3D- usada na movimentação da câmera
 static Vec3 LerpVec3(const Vec3 &a, const Vec3 &b, float t) {
   // Interpolacao com clamp
   float clamped = std::clamp(t, 0.0f, 1.0f);
@@ -22,6 +24,7 @@ static Vec3 LerpVec3(const Vec3 &a, const Vec3 &b, float t) {
           LerpFloat(a.z, b.z, clamped)};
 }
 
+//função de suavização - usada para transições de câmera e efeitos visuais
 static float SmoothStep01(float t) {
   // Suavizacao [0,1]
   float clamped = std::clamp(t, 0.0f, 1.0f);
@@ -35,10 +38,12 @@ int main() {
     return 1;
   }
 
+  //define a versão do OpenGL 
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+  //cria a janela e verifica se erro
   GLFWwindow *window = glfwCreateWindow(1280, 720, "Pista", nullptr, nullptr);
   if (!window) {
     std::cerr << "Falha ao criar janela.\n";
@@ -46,6 +51,7 @@ int main() {
     return 1;
   }
 
+  //define o contexto da janela criada
   glfwMakeContextCurrent(window);
 
   glewExperimental = GL_TRUE;
@@ -57,7 +63,7 @@ int main() {
   }
 
   glEnable(GL_DEPTH_TEST);
-  glClearColor(0.18f, 0.19f, 0.21f, 1.0f);
+  glClearColor(0.18f, 0.19f, 0.21f, 1.0f); //define cor de fundo 
 
   // Audio em loop
   const char *musicPath = "src/music/Mr Bean Music.mp3";
@@ -86,6 +92,7 @@ int main() {
   menuBounds.winButtonMinV = 0.12f;
   menuBounds.winButtonMaxV = 0.25f;
   MenuUi menuUi;
+  
   // Inicializa UI do menu
   if (!InitMenuUi(menuUi, menuBounds, "src/menu/images/menu_inicial.png",
                   "src/menu/images/menu_perder.png",

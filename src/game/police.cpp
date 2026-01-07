@@ -40,7 +40,7 @@ Vec3 PredictTargetPosition(const VehicleState &target, float predictionTime) {
 float gStuckTimer = 0.0f;
 float gReverseTimer = 0.0f;
 float gPreviousSpeed = 0.0f;
-} // namespace
+} 
 
 void ResetPoliceChaseState() {
   // Limpa timers internos
@@ -49,10 +49,7 @@ void ResetPoliceChaseState() {
   gPreviousSpeed = 0.0f;
 }
 
-void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
-                       float dt, float elapsedSeconds, float startDelaySeconds,
-                       const MovementConfig &config, float trackHalfExtent,
-                       const std::vector<Vec3> &trail) {
+void UpdatePoliceChase(VehicleState &police, const VehicleState &target, float dt, float elapsedSeconds, float startDelaySeconds, const MovementConfig &config, float trackHalfExtent, const std::vector<Vec3> &trail) {
   float clampedDt = std::max(dt, 0.0f);
 
   // Modo de destravar (marcha-atrás)
