@@ -9,7 +9,7 @@
 bool InitMenuUi(MenuUi &menu, const MenuBounds &bounds,
                 const std::string &startImage, const std::string &loseImage,
                 const std::string &winImage) {
-  // Guarda bounds e cria shader do menu
+  // Guarda bounds (retangulos clicaveis) e cria shader do menu
   menu.bounds = bounds;
   menu.program =
       CreateProgram("shaders/menu_vertex.vs", "shaders/menu_fragment.fs");
@@ -17,15 +17,17 @@ bool InitMenuUi(MenuUi &menu, const MenuBounds &bounds,
     return false;
   }
 
+  //vai buscar o uniform da textura
   menu.locTexture = glGetUniformLocation(menu.program, "uTexture");
 
   // Quad fullscreen com UVs
   float quad[] = {
-      -1.0f, -1.0f, 0.0f, 0.0f, //
-      1.0f,  -1.0f, 1.0f, 0.0f, //
-      -1.0f, 1.0f,  0.0f, 1.0f, //
-      1.0f,  1.0f,  1.0f, 1.0f  //
+      -1.0f, -1.0f, 0.0f, 0.0f, 
+      1.0f,  -1.0f, 1.0f, 0.0f, 
+      -1.0f, 1.0f,  0.0f, 1.0f, 
+      1.0f,  1.0f,  1.0f, 1.0f  
   };
+  // Cria VAO e VBO do quad e define atributos
   glGenVertexArrays(1, &menu.vao);
   glGenBuffers(1, &menu.vbo);
   glBindVertexArray(menu.vao);
@@ -54,12 +56,15 @@ bool RunStartMenu(MenuUi &menu, GLFWwindow *window) {
 
   glDisable(GL_DEPTH_TEST);
   while (!glfwWindowShouldClose(window)) {
+
     int fbWidth = 0;
     int fbHeight = 0;
+    //ajusta o viewport(area de desenho na janela) ao tamanho da janela
     glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
     glViewport(0, 0, fbWidth, fbHeight);
     glClear(GL_COLOR_BUFFER_BIT);
 
+    // Desenha menu
     glUseProgram(menu.program);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, menu.startTexture);
@@ -71,14 +76,18 @@ bool RunStartMenu(MenuUi &menu, GLFWwindow *window) {
     glfwSwapBuffers(window);
     glfwPollEvents();
 
+    // Trata clique na area do botao jogar
     double mouseX = 0.0;
     double mouseY = 0.0;
     glfwGetCursorPos(window, &mouseX, &mouseY);
     int winW = 0;
     int winH = 0;
     glfwGetWindowSize(window, &winW, &winH);
-    bool mouseDown =
-        glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+    
+    //verifica se o botao esquerdo do rato esta pressionado
+    bool mouseDown =  glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+
+    //verifica se o rato esta dentro da area do botao jogar
     if (mouseDown && !menu.wasMouseDownStart && winW > 0 && winH > 0) {
       float u = static_cast<float>(mouseX) / static_cast<float>(winW);
       float v = 1.0f - static_cast<float>(mouseY) / static_cast<float>(winH);
@@ -104,6 +113,7 @@ LoseMenuResult ShowLoseMenu(MenuUi &menu, GLFWwindow *window, int width,
     return result;
   }
 
+  // Desenha menu de derrota
   glDisable(GL_DEPTH_TEST);
   glViewport(0, 0, width, height);
   glUseProgram(menu.program);
@@ -146,6 +156,7 @@ WinMenuResult ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width,
     return result;
   }
 
+  // Desenha menu de vitoria
   glDisable(GL_DEPTH_TEST);
   glViewport(0, 0, width, height);
   glUseProgram(menu.program);

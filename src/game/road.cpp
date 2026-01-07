@@ -26,7 +26,7 @@ bool PointInTriangle(const Vec2 &p, const Triangle2 &t) {
   bool hasPos = (d1 > eps) || (d2 > eps) || (d3 > eps);
   return !(hasNeg && hasPos);
 }
-} // namespace
+}
 
 void ExtractRoadPoints(const Model &model, float worldScale,
                        std::vector<Vec2> &outPoints,

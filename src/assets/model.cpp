@@ -17,7 +17,7 @@
 #include "stb_image.h"
 
 namespace {
-// Remove espaços em branco no início e no fim
+// Remove espaços em branco no início e no fim da string
 std::string Trim(const std::string &s) {
   size_t start = s.find_first_not_of(" \t\r\n");
   if (start == std::string::npos) {
@@ -47,7 +47,7 @@ int ResolveIndex(int idx, int size) {
 }
 
 struct ObjIndex {
-  // Índices de posição/texcoord/normal
+  // Índices de posição/texcoord/normal do OBJ
   int v = 0;
   int vt = 0;
   int vn = 0;
@@ -55,25 +55,31 @@ struct ObjIndex {
 
 // Lê um token de face no formato v/vt/vn
 ObjIndex ParseFaceToken(const std::string &token) {
+  //estrutura para guardar os indices de cada vertice
   ObjIndex out;
+  //procura as barras que separam os indices
   size_t first = token.find('/');
+  // se nao houver barras, so tem o indice de posicao
   if (first == std::string::npos) {
     out.v = std::stoi(token);
     return out;
   }
 
+  // extrai os indices de posicao, texcoord e normal
   size_t second = token.find('/', first + 1);
   std::string vStr = token.substr(0, first);
   std::string vtStr;
   std::string vnStr;
 
+  // se nao houver segunda barra, so tem posicao e texcoord
   if (second == std::string::npos) {
     vtStr = token.substr(first + 1);
-  } else {
+  } else { // tem posicao, texcoord e normal
     vtStr = token.substr(first + 1, second - first - 1);
     vnStr = token.substr(second + 1);
   }
 
+  // converte strings do obj para inteiros
   if (!vStr.empty()) {
     out.v = std::stoi(vStr);
   }
@@ -87,7 +93,7 @@ ObjIndex ParseFaceToken(const std::string &token) {
   return out;
 }
 
-// Devolve o diretório de um caminho
+// extrai o diretorio de um caminho de ficheiro
 std::string Dirname(const std::string &path) {
   size_t pos = path.find_last_of("/\\");
   if (pos == std::string::npos) {
@@ -97,35 +103,37 @@ std::string Dirname(const std::string &path) {
 }
 
 // Carrega materiais do ficheiro MTL
-bool LoadMtl(const std::string &path,
-             std::unordered_map<std::string, Material> &materials) {
+bool LoadMtl(const std::string &path, std::unordered_map<std::string, Material> &materials) {
+  // Abre o ficheiro MTL
   std::ifstream file(path);
   if (!file) {
     std::cerr << "Nao foi possivel abrir MTL: " << path << "\n";
     return false;
   }
 
+  // Lê o ficheiro linha a linha
   std::string baseDir = Dirname(path);
   Material *current = nullptr;
   std::string line;
+  // Percorre cada linha do ficheiro
   while (std::getline(file, line)) {
     line = Trim(line);
     if (line.empty() || line[0] == '#') {
       continue;
     }
 
+    // Processa comandos do MTL
     if (line.rfind("newmtl ", 0) == 0) {
       Material mat;
       mat.name = Trim(line.substr(7));
       materials[mat.name] = mat;
       current = &materials[mat.name];
-    } else if (line.rfind("Kd ", 0) == 0 && current) {
+    } else if (line.rfind("Kd ", 0) == 0 && current) { // Cor difusa - cor quando a luz incide
       auto parts = SplitWhitespace(line);
       if (parts.size() >= 4) {
-        current->kd = {std::stof(parts[1]), std::stof(parts[2]),
-                       std::stof(parts[3])};
+        current->kd = {std::stof(parts[1]), std::stof(parts[2]), std::stof(parts[3])};
       }
-    } else if (line.rfind("map_Kd ", 0) == 0 && current) {
+    } else if (line.rfind("map_Kd ", 0) == 0 && current) { // Textura difusa
       std::string mapName = Trim(line.substr(7));
       if (!mapName.empty()) {
         current->mapKd = baseDir + mapName;
@@ -135,8 +143,9 @@ bool LoadMtl(const std::string &path,
 
   return true;
 }
-} // namespace
+}
 
+// Carrega modelo OBJ
 bool LoadObj(const std::string &path, Model &model) {
   // Abre o ficheiro OBJ
   std::ifstream file(path);
@@ -145,12 +154,14 @@ bool LoadObj(const std::string &path, Model &model) {
     return false;
   }
 
-  // Buffers temporários para os dados do OBJ
+  // Buffers temporários para os dados do OBJ- guarda posicoes, normais, texcoords, materiais e meshes na CPU
   std::vector<Vec3> positions;
   std::vector<Vec3> normals;
   std::vector<Vec2> texcoords;
   std::unordered_map<std::string, Material> materials;
   std::unordered_map<std::string, Mesh> meshBuilders;
+
+  //se o obj nao especificar material, usa o default
   std::string currentMaterial = "default";
   meshBuilders[currentMaterial] = Mesh{};
   meshBuilders[currentMaterial].materialName = currentMaterial;
@@ -160,8 +171,11 @@ bool LoadObj(const std::string &path, Model &model) {
   std::string baseDir = Dirname(path);
 
   std::string line;
+
+  // Percorre cada linha do ficheiro
   while (std::getline(file, line)) {
     line = Trim(line);
+    // Ignora linhas vazias ou comentários
     if (line.empty() || line[0] == '#') {
       continue;
     }
@@ -171,11 +185,12 @@ bool LoadObj(const std::string &path, Model &model) {
       continue;
     }
 
+    // Processa comandos do OBJ
     if (parts[0] == "o" && parts.size() >= 2) {
       // Guarda o nome do objeto atual (ignora Cube)
       currentObject = parts[1];
       skipCurrentObject = (currentObject == "Cube");
-    } else if (parts[0] == "mtllib") {
+    } else if (parts[0] == "mtllib") { // carrega materiais do ficheiro MTL
       // Lê o ficheiro de materiais
       size_t mtllibPos = line.find("mtllib");
       std::string mtlName = Trim(line.substr(mtllibPos + 6));
@@ -204,28 +219,26 @@ bool LoadObj(const std::string &path, Model &model) {
         meshBuilders[currentMaterial] = mesh;
       }
     } else if (parts[0] == "f" && parts.size() >= 4) {
-      // Lê faces e triangula por fan
+      // Lê faces e transforma em triângulos
       if (skipCurrentObject) {
         continue;
       }
       std::vector<ObjIndex> indices;
-      indices.reserve(parts.size() - 1);
+      indices.reserve(parts.size() - 1)
       for (size_t i = 1; i < parts.size(); ++i) {
         indices.push_back(ParseFaceToken(parts[i]));
       }
 
+      // Transforma face em triângulos (fan triangulation)
       for (size_t i = 1; i + 1 < indices.size(); ++i) {
         ObjIndex i0 = indices[0];
         ObjIndex i1 = indices[i];
         ObjIndex i2 = indices[i + 1];
 
         // Posições dos vértices
-        Vec3 p0 =
-            positions[ResolveIndex(i0.v, static_cast<int>(positions.size()))];
-        Vec3 p1 =
-            positions[ResolveIndex(i1.v, static_cast<int>(positions.size()))];
-        Vec3 p2 =
-            positions[ResolveIndex(i2.v, static_cast<int>(positions.size()))];
+        Vec3 p0 = positions[ResolveIndex(i0.v, static_cast<int>(positions.size()))];
+        Vec3 p1 = positions[ResolveIndex(i1.v, static_cast<int>(positions.size()))];
+        Vec3 p2 = positions[ResolveIndex(i2.v, static_cast<int>(positions.size()))];
 
         // Calcula normal de fallback quando não há normais
         bool hasNormals =
