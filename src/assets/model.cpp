@@ -17,6 +17,7 @@
 #include "stb_image.h"
 
 namespace {
+// Remove espaços em branco no início e no fim
 std::string Trim(const std::string &s) {
   size_t start = s.find_first_not_of(" \t\r\n");
   if (start == std::string::npos) {
@@ -26,6 +27,7 @@ std::string Trim(const std::string &s) {
   return s.substr(start, end - start + 1);
 }
 
+// Divide uma linha em partes separadas por espaço
 std::vector<std::string> SplitWhitespace(const std::string &s) {
   std::istringstream iss(s);
   std::vector<std::string> parts;
@@ -36,6 +38,7 @@ std::vector<std::string> SplitWhitespace(const std::string &s) {
   return parts;
 }
 
+// Converte índice OBJ (1-based ou negativo) para 0-based
 int ResolveIndex(int idx, int size) {
   if (idx > 0) {
     return idx - 1;
@@ -44,11 +47,13 @@ int ResolveIndex(int idx, int size) {
 }
 
 struct ObjIndex {
+  // Índices de posição/texcoord/normal
   int v = 0;
   int vt = 0;
   int vn = 0;
 };
 
+// Lê um token de face no formato v/vt/vn
 ObjIndex ParseFaceToken(const std::string &token) {
   ObjIndex out;
   size_t first = token.find('/');
@@ -82,6 +87,7 @@ ObjIndex ParseFaceToken(const std::string &token) {
   return out;
 }
 
+// Devolve o diretório de um caminho
 std::string Dirname(const std::string &path) {
   size_t pos = path.find_last_of("/\\");
   if (pos == std::string::npos) {
@@ -90,6 +96,7 @@ std::string Dirname(const std::string &path) {
   return path.substr(0, pos + 1);
 }
 
+// Carrega materiais do ficheiro MTL
 bool LoadMtl(const std::string &path,
              std::unordered_map<std::string, Material> &materials) {
   std::ifstream file(path);
@@ -131,12 +138,14 @@ bool LoadMtl(const std::string &path,
 } // namespace
 
 bool LoadObj(const std::string &path, Model &model) {
+  // Abre o ficheiro OBJ
   std::ifstream file(path);
   if (!file) {
     std::cerr << "Nao foi possivel abrir OBJ: " << path << "\n";
     return false;
   }
 
+  // Buffers temporários para os dados do OBJ
   std::vector<Vec3> positions;
   std::vector<Vec3> normals;
   std::vector<Vec2> texcoords;
@@ -163,9 +172,11 @@ bool LoadObj(const std::string &path, Model &model) {
     }
 
     if (parts[0] == "o" && parts.size() >= 2) {
+      // Guarda o nome do objeto atual (ignora Cube)
       currentObject = parts[1];
       skipCurrentObject = (currentObject == "Cube");
     } else if (parts[0] == "mtllib") {
+      // Lê o ficheiro de materiais
       size_t mtllibPos = line.find("mtllib");
       std::string mtlName = Trim(line.substr(mtllibPos + 6));
       std::string mtlPath = baseDir + mtlName;
@@ -174,14 +185,18 @@ bool LoadObj(const std::string &path, Model &model) {
         LoadMtl(fallback, materials);
       }
     } else if (parts[0] == "v" && parts.size() >= 4) {
+      // Lê posições dos vértices
       positions.push_back(
           {std::stof(parts[1]), std::stof(parts[2]), std::stof(parts[3])});
     } else if (parts[0] == "vt" && parts.size() >= 3) {
+      // Lê coordenadas de textura
       texcoords.push_back({std::stof(parts[1]), std::stof(parts[2])});
     } else if (parts[0] == "vn" && parts.size() >= 4) {
+      // Lê normais
       normals.push_back(
           {std::stof(parts[1]), std::stof(parts[2]), std::stof(parts[3])});
     } else if (parts[0] == "usemtl" && parts.size() >= 2) {
+      // Troca de material
       currentMaterial = parts[1];
       if (meshBuilders.find(currentMaterial) == meshBuilders.end()) {
         Mesh mesh;
@@ -189,6 +204,7 @@ bool LoadObj(const std::string &path, Model &model) {
         meshBuilders[currentMaterial] = mesh;
       }
     } else if (parts[0] == "f" && parts.size() >= 4) {
+      // Lê faces e triangula por fan
       if (skipCurrentObject) {
         continue;
       }
@@ -203,6 +219,7 @@ bool LoadObj(const std::string &path, Model &model) {
         ObjIndex i1 = indices[i];
         ObjIndex i2 = indices[i + 1];
 
+        // Posições dos vértices
         Vec3 p0 =
             positions[ResolveIndex(i0.v, static_cast<int>(positions.size()))];
         Vec3 p1 =
@@ -210,6 +227,7 @@ bool LoadObj(const std::string &path, Model &model) {
         Vec3 p2 =
             positions[ResolveIndex(i2.v, static_cast<int>(positions.size()))];
 
+        // Calcula normal de fallback quando não há normais
         bool hasNormals =
             (i0.vn != 0 && i1.vn != 0 && i2.vn != 0 && !normals.empty());
         Vec3 faceNormal = Normalize(Cross(p1 - p0, p2 - p0));
@@ -226,6 +244,7 @@ bool LoadObj(const std::string &path, Model &model) {
             }
           }
 
+          // Coordenada de textura, se existir
           Vec2 texCoord = {0.0f, 0.0f};
           if (idx.vt != 0 && !texcoords.empty()) {
             int texIndex =
@@ -251,6 +270,7 @@ bool LoadObj(const std::string &path, Model &model) {
   Vec3 minPos;
   Vec3 maxPos;
 
+  // Calcula bounding box a partir dos meshes
   for (auto &entry : meshBuilders) {
     Mesh &mesh = entry.second;
     if (mesh.vertices.empty()) {
@@ -278,6 +298,7 @@ bool LoadObj(const std::string &path, Model &model) {
     return false;
   }
 
+  // Centraliza e normaliza o tamanho do modelo
   model.center = (minPos + maxPos) * 0.5f;
   Vec3 size = maxPos - minPos;
   float maxDim = std::max({size.x, size.y, size.z});
@@ -292,6 +313,7 @@ bool LoadObj(const std::string &path, Model &model) {
       continue;
     }
 
+    // Aplica a transformação de centro e escala
     for (auto &vertex : mesh.vertices) {
       vertex.position = (vertex.position - model.center) * model.scale;
     }
@@ -304,6 +326,7 @@ bool LoadObj(const std::string &path, Model &model) {
 }
 
 void SetupMesh(Mesh &mesh) {
+  // Cria VAO e VBO e envia os dados
   glGenVertexArrays(1, &mesh.vao);
   glGenBuffers(1, &mesh.vbo);
   glBindVertexArray(mesh.vao);
@@ -311,6 +334,7 @@ void SetupMesh(Mesh &mesh) {
   glBufferData(GL_ARRAY_BUFFER, mesh.vertices.size() * sizeof(Vertex),
                mesh.vertices.data(), GL_STATIC_DRAW);
 
+  // Configura atributos: posição, normal e texcoord
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *)0);
   glEnableVertexAttribArray(1);
@@ -324,6 +348,7 @@ void SetupMesh(Mesh &mesh) {
 }
 
 GLuint LoadTexture2D(const std::string &path) {
+  // Carrega imagem com stb_image
   int width = 0;
   int height = 0;
   int channels = 0;
@@ -335,6 +360,7 @@ GLuint LoadTexture2D(const std::string &path) {
     return 0;
   }
 
+  // Cria e configura textura no OpenGL
   GLuint texture = 0;
   glGenTextures(1, &texture);
   glBindTexture(GL_TEXTURE_2D, texture);
@@ -352,6 +378,7 @@ GLuint LoadTexture2D(const std::string &path) {
 }
 
 void SetupTextures(Model &model) {
+  // Carrega as texturas de cada material
   for (auto &entry : model.materials) {
     Material &material = entry.second;
     if (!material.mapKd.empty()) {
@@ -362,6 +389,7 @@ void SetupTextures(Model &model) {
 }
 
 void CleanupModel(Model &model) {
+  // Liberta buffers dos meshes
   for (auto &mesh : model.meshes) {
     if (mesh.vbo) {
       glDeleteBuffers(1, &mesh.vbo);
@@ -373,6 +401,7 @@ void CleanupModel(Model &model) {
     }
   }
 
+  // Liberta texturas dos materiais
   for (auto &entry : model.materials) {
     if (entry.second.textureId) {
       glDeleteTextures(1, &entry.second.textureId);

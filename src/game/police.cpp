@@ -4,6 +4,7 @@
 #include <cmath>
 
 namespace {
+// Normaliza ângulo para o intervalo [-pi, pi]
 float NormalizeAngle(float angle) {
   const float twoPi = 6.2831853f;
   const float pi = 3.1415926f;
@@ -16,10 +17,10 @@ float NormalizeAngle(float angle) {
   return angle;
 }
 
-// Calcula a velocidade ideal para uma curva baseada no ângulo
+// Calcula velocidade ideal para curvas
 float CalculateCurveSpeed(float angleRadians, float maxSpeed) {
   float absAngle = std::abs(angleRadians);
-  // Curvas fechadas (> 45°) reduzem velocidade significativamente
+  // Curvas fechadas reduzem mais a velocidade
   if (absAngle > 0.785f) { // 45 graus
     return maxSpeed * 0.5f;
   } else if (absAngle > 0.524f) { // 30 graus
@@ -30,18 +31,19 @@ float CalculateCurveSpeed(float angleRadians, float maxSpeed) {
   return maxSpeed;
 }
 
-// Prediz posição futura do alvo baseado na velocidade atual
+// Prediz posição futura do alvo
 Vec3 PredictTargetPosition(const VehicleState &target, float predictionTime) {
   return target.position + target.velocity * predictionTime;
 }
 
-// Estado do "AI" persistente entre frames; resetado quando reiniciamos o jogo.
+// Estado da IA entre frames (reset no recomeço)
 float gStuckTimer = 0.0f;
 float gReverseTimer = 0.0f;
 float gPreviousSpeed = 0.0f;
 } // namespace
 
 void ResetPoliceChaseState() {
+  // Limpa timers internos
   gStuckTimer = 0.0f;
   gReverseTimer = 0.0f;
   gPreviousSpeed = 0.0f;
@@ -53,19 +55,19 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
                        const std::vector<Vec3> &trail) {
   float clampedDt = std::max(dt, 0.0f);
 
-  // Unstuck Mode (Reversing)
+  // Modo de destravar (marcha-atrás)
   if (gReverseTimer > 0.0f) {
     gReverseTimer -= clampedDt;
 
-    // Reverse Action
+    // Recuar a controlar a velocidade
     police.speed = std::max(police.speed - config.braking * clampedDt,
                             -config.maxSpeed * 0.5f);
 
-    // Counter-steer while reversing to back out of corner
+    // Contra-virar para sair da esquina
     police.heading -= config.turnRate * clampedDt * 0.5f;
 
-    // Apply physics
-    const float headingOffset = 0.0f; // Sem offset adicional, o policeBaseRotation já faz a rotação visual
+    // Aplica física básica
+    const float headingOffset = 0.0f; // Sem offset extra
     float worldHeading = police.heading + headingOffset;
     Vec3 forwardDir = {std::cos(worldHeading), 0.0f, std::sin(worldHeading)};
     police.velocity = forwardDir * police.speed;
@@ -78,17 +80,17 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
   }
 
   if (elapsedSeconds < startDelaySeconds) {
+    // Ainda não começa a perseguir
     police.velocity = {0.0f, 0.0f, 0.0f};
     police.speed = 0.0f;
     return;
   }
 
-  // Sistema inteligente de previsão e pathfinding
+  // Previsão simples do alvo
   Vec3 targetPos = target.position;
   
-  // Predizer posição futura do alvo baseado na velocidade
   float targetSpeed = Length(target.velocity);
-  float predictionTime = 0.5f; // Meio segundo à frente
+  float predictionTime = 0.5f; // Meio segundo
   if (targetSpeed > 0.1f) {
     Vec3 predictedPos = PredictTargetPosition(target, predictionTime);
     targetPos = predictedPos;
@@ -97,12 +99,12 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
   bool chasingTrail = false;
   float distanceToTarget = Length(targetPos - police.position);
 
-  // Sistema avançado de trail following
+  // Seguir rasto quando está longe
   if (!trail.empty() && distanceToTarget > 5.0f) {
     float minDistSq = 1e9f;
     size_t closestIdx = 0;
 
-    // Find closest trail point to police
+    // Encontra o ponto do rasto mais próximo
     for (size_t i = 0; i < trail.size(); ++i) {
       Vec3 d = trail[i] - police.position;
       float dSq = d.x * d.x + d.z * d.z;
@@ -112,7 +114,7 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
       }
     }
 
-    // Calcular lookAhead dinâmico baseado na velocidade
+    // Look-ahead varia com a velocidade
     float speedRatio = std::abs(police.speed) / config.maxSpeed;
     size_t lookAhead = static_cast<size_t>(5 + speedRatio * 15); // 5-20 pontos
     size_t targetIdx = closestIdx + lookAhead;
@@ -139,14 +141,14 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
   float desiredYaw = std::atan2(toTarget.z, toTarget.x);
   float yawDiff = NormalizeAngle(desiredYaw - worldHeading);
 
-  // Sistema de direção realista com suavização
+  // Direção com suavização
   float steerInput = std::clamp(yawDiff * 1.2f, -1.0f, 1.0f);
   
-  // Steering com peso baseado na velocidade (mais responsivo em alta velocidade)
+  // Steering mais forte em alta velocidade
   if (steerInput != 0.0f) {
     float speedFactor =
         std::clamp(std::abs(police.speed) / config.maxSpeed, 0.3f, 1.0f);
-    // Suavização do steering para movimento mais natural
+    // Suaviza a rotação
     float steerAmount = steerInput * config.turnRate * speedFactor * clampedDt;
     police.heading += steerAmount;
     worldHeading = police.heading + headingOffset;
@@ -154,35 +156,34 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
 
   Vec3 forwardDir = {std::cos(worldHeading), 0.0f, std::sin(worldHeading)};
 
-  // Sistema inteligente de controle de velocidade
+  // Ajusta a velocidade pelas curvas
   float curveSpeed = CalculateCurveSpeed(yawDiff, config.maxSpeed);
   float desiredSpeed = curveSpeed;
 
-  // Ajustar velocidade baseado no contexto
   if (!chasingTrail) {
-    // Aproximação final - controle preciso
+    // Aproximação final
     if (distance < 3.0f) {
       desiredSpeed = std::min(curveSpeed, distance * 1.5f);
     } else {
       desiredSpeed = std::min(curveSpeed, config.maxSpeed * 0.9f);
     }
   } else {
-    // Seguindo trail - mantém velocidade alta em retas
+    // Seguindo rasto
     if (std::abs(yawDiff) < 0.174f) { // < 10 graus = reta
       desiredSpeed = config.maxSpeed;
     }
   }
 
-  // Sistema de aceleração/desaceleração realista e suave
+  // Aceleração/desaceleração suave
   float speedError = desiredSpeed - police.speed;
   
-  // Aceleração progressiva (mais realista)
+  // Ajuste da aceleração
   float accelMultiplier = 1.0f;
   if (speedError > 0.0f) {
-    // Acelerando - suave no início
+    // Acelerar mais suave no início
     accelMultiplier = std::min(1.0f, 0.3f + std::abs(police.speed) / config.maxSpeed * 0.7f);
   } else {
-    // Desacelerando - mais agressivo em curvas fechadas
+    // Travar mais em curvas
     float curveIntensity = std::abs(yawDiff) / 1.57f; // Normalizado por 90°
     accelMultiplier = 1.0f + curveIntensity * 1.5f;
   }
@@ -192,7 +193,7 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
                                config.acceleration);
   police.speed += accelCmd * clampedDt;
 
-  // Drag realista - mais forte em velocidades altas
+  // Drag mais forte em alta velocidade
   float dragEffect = config.drag * (1.0f + std::abs(police.speed) / config.maxSpeed * 0.5f);
   if (police.speed > 0.0f) {
     police.speed = std::max(0.0f, police.speed - dragEffect * clampedDt);
@@ -210,7 +211,7 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
   police.position.z =
       std::clamp(police.position.z, -trackHalfExtent, trackHalfExtent);
 
-  // Sistema inteligente de detecção de travamento
+  // Deteta se ficou preso
   float speedChange = std::abs(police.speed - gPreviousSpeed);
   bool isStuck = (std::abs(police.speed) < 0.8f && distance > 2.0f) || 
                  (speedChange < 0.1f && std::abs(police.speed) < 1.5f);
@@ -221,7 +222,7 @@ void UpdatePoliceChase(VehicleState &police, const VehicleState &target,
     gStuckTimer = std::max(0.0f, gStuckTimer - clampedDt * 0.5f);
   }
 
-  // Trigger inteligente de manobra de recuperação
+  // Dispara a manobra de recuperação
   if (gStuckTimer > 1.2f) {
     gReverseTimer = 1.0f + (gStuckTimer * 0.3f); // Tempo variável baseado no quanto ficou preso
     gStuckTimer = 0.0f;

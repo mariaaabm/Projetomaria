@@ -5,6 +5,7 @@
 
 InputState ReadPlayerInput(GLFWwindow *window) {
   InputState input;
+  // Mapeia WASD e espaço
   input.forward = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS;
   input.backward = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
   input.left = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
@@ -16,23 +17,26 @@ InputState ReadPlayerInput(GLFWwindow *window) {
 void UpdatePlayer(VehicleState &player, const InputState &input, float dt,
                   const MovementConfig &config, float headingOffset,
                   float trackHalfExtent, std::vector<Vec3> &trail) {
-  // Record trail
+  // Guarda pontos do rasto
   if (trail.empty()) {
     trail.push_back(player.position);
   } else {
     Vec3 last = trail.back();
     float distSq = (player.position.x - last.x) * (player.position.x - last.x) +
                    (player.position.z - last.z) * (player.position.z - last.z);
-    if (distSq > 2.0f * 2.0f) { // Every 2 meters
+    if (distSq > 2.0f * 2.0f) { // A cada 2 metros
       trail.push_back(player.position);
     }
   }
 
+  // Evita dt negativo
   float clampedDt = std::max(dt, 0.0f);
 
+  // Direção em mundo
   float worldHeading = player.heading + headingOffset;
   Vec3 forwardDir = {std::cos(worldHeading), 0.0f, std::sin(worldHeading)};
 
+  // Aceleração base
   float targetAccel = 0.0f;
   if (input.forward) {
     targetAccel += config.acceleration;
@@ -42,6 +46,7 @@ void UpdatePlayer(VehicleState &player, const InputState &input, float dt,
   }
   player.speed += targetAccel * clampedDt;
 
+  // Travagem
   if (input.brake) {
     if (player.speed > 0.0f) {
       player.speed = std::max(0.0f, player.speed - config.braking * clampedDt);
@@ -50,6 +55,7 @@ void UpdatePlayer(VehicleState &player, const InputState &input, float dt,
     }
   }
 
+  // Arrasto
   if (player.speed > 0.0f) {
     player.speed = std::max(0.0f, player.speed - config.drag * clampedDt);
   } else if (player.speed < 0.0f) {
@@ -59,6 +65,7 @@ void UpdatePlayer(VehicleState &player, const InputState &input, float dt,
   float maxReverse = -config.maxSpeed * 0.5f;
   player.speed = std::clamp(player.speed, maxReverse, config.maxSpeed);
 
+  // Direção (steering)
   float steerInput = 0.0f;
   if (input.left) {
     steerInput -= 1.0f;
@@ -78,8 +85,10 @@ void UpdatePlayer(VehicleState &player, const InputState &input, float dt,
     forwardDir = {std::cos(worldHeading), 0.0f, std::sin(worldHeading)};
   }
 
+  // Atualiza posição
   player.velocity = forwardDir * player.speed;
   player.position = player.position + player.velocity * clampedDt;
+  // Mantém o jogador dentro dos limites
   player.position.x =
       std::clamp(player.position.x, -trackHalfExtent, trackHalfExtent);
   player.position.z =
