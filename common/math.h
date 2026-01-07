@@ -3,16 +3,19 @@
 #include <cmath>
 
 struct Vec2 {
+  // Coordenadas 2D basicas
   float x = 0.0f;
   float y = 0.0f;
 };
 
 struct Vec3 {
+  // Coordenadas 3D basicas
   float x = 0.0f;
   float y = 0.0f;
   float z = 0.0f;
 };
 
+// Operacoes vetoriais basicas
 inline Vec3 operator+(const Vec3 &a, const Vec3 &b) {
   return {a.x + b.x, a.y + b.y, a.z + b.z};
 }
@@ -29,6 +32,7 @@ inline Vec3 operator/(const Vec3 &v, float s) {
   return {v.x / s, v.y / s, v.z / s};
 }
 
+// Produto escalar e produto vetorial
 inline float Dot(const Vec3 &a, const Vec3 &b) {
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
@@ -41,6 +45,7 @@ inline Vec3 Cross(const Vec3 &a, const Vec3 &b) {
   };
 }
 
+// Comprimento e normalizacao
 inline float Length(const Vec3 &v) {
   return std::sqrt(Dot(v, v));
 }
@@ -54,9 +59,11 @@ inline Vec3 Normalize(const Vec3 &v) {
 }
 
 struct Mat4 {
+  // Matriz 4x4 em coluna
   float m[16] = {0};
 };
 
+// Matrizes utilitarias
 inline Mat4 Mat4Identity() {
   Mat4 out;
   out.m[0] = 1.0f;
@@ -66,6 +73,7 @@ inline Mat4 Mat4Identity() {
   return out;
 }
 
+// Multiplicacao de matrizes 4x4
 inline Mat4 Mat4Multiply(const Mat4 &a, const Mat4 &b) {
   Mat4 out;
   for (int col = 0; col < 4; ++col) {
@@ -80,6 +88,7 @@ inline Mat4 Mat4Multiply(const Mat4 &a, const Mat4 &b) {
   return out;
 }
 
+// Transformacoes basicas
 inline Mat4 Mat4Translate(const Vec3 &t) {
   Mat4 out = Mat4Identity();
   out.m[12] = t.x;
@@ -107,6 +116,7 @@ inline Mat4 Mat4RotateY(float angleRadians) {
   return out;
 }
 
+// Projecao em perspectiva
 inline Mat4 Mat4Perspective(float fovyRadians, float aspect, float zNear, float zFar) {
   Mat4 out;
   float f = 1.0f / std::tan(fovyRadians * 0.5f);
@@ -118,6 +128,7 @@ inline Mat4 Mat4Perspective(float fovyRadians, float aspect, float zNear, float 
   return out;
 }
 
+// Camera look-at
 inline Mat4 Mat4LookAt(const Vec3 &eye, const Vec3 &target, const Vec3 &up) {
   Vec3 f = Normalize(target - eye);
   Vec3 s = Normalize(Cross(f, up));

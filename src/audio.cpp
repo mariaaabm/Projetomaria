@@ -8,10 +8,12 @@ static ma_sound gMusic;
 static bool gAudioReady = false;
 
 bool InitAudioEngine(const char *musicPath) {
+  // Evita reinicializacao e valida caminho
   if (gAudioReady || !musicPath) {
     return true;
   }
 
+  // Configura o engine e cria o stream de musica
   ma_engine_config cfg = ma_engine_config_init();
   if (ma_engine_init(&cfg, &gEngine) != MA_SUCCESS) {
     return false;
@@ -25,6 +27,7 @@ bool InitAudioEngine(const char *musicPath) {
     return false;
   }
 
+  // Loop continuo da musica
   ma_sound_set_looping(&gMusic, MA_TRUE);
   ma_sound_start(&gMusic);
   gAudioReady = true;
@@ -32,6 +35,7 @@ bool InitAudioEngine(const char *musicPath) {
 }
 
 void ShutdownAudioEngine() {
+  // Liberta recursos de audio
   if (!gAudioReady) {
     return;
   }

@@ -9,6 +9,7 @@
 bool InitMenuUi(MenuUi &menu, const MenuBounds &bounds,
                 const std::string &startImage, const std::string &loseImage,
                 const std::string &winImage) {
+  // Guarda bounds e cria shader do menu
   menu.bounds = bounds;
   menu.program =
       CreateProgram("shaders/menu_vertex.vs", "shaders/menu_fragment.fs");
@@ -18,6 +19,7 @@ bool InitMenuUi(MenuUi &menu, const MenuBounds &bounds,
 
   menu.locTexture = glGetUniformLocation(menu.program, "uTexture");
 
+  // Quad fullscreen com UVs
   float quad[] = {
       -1.0f, -1.0f, 0.0f, 0.0f, //
       1.0f,  -1.0f, 1.0f, 0.0f, //
@@ -37,6 +39,7 @@ bool InitMenuUi(MenuUi &menu, const MenuBounds &bounds,
                         (void *)(sizeof(float) * 2));
   glBindVertexArray(0);
 
+  // Carrega texturas dos menus
   menu.startTexture = LoadTexture2D(startImage);
   menu.loseTexture = LoadTexture2D(loseImage);
   menu.winTexture = LoadTexture2D(winImage);
@@ -44,6 +47,7 @@ bool InitMenuUi(MenuUi &menu, const MenuBounds &bounds,
 }
 
 bool RunStartMenu(MenuUi &menu, GLFWwindow *window) {
+  // Loop do menu inicial ate clicar em jogar
   if (!menu.startTexture) {
     return false;
   }
@@ -63,6 +67,7 @@ bool RunStartMenu(MenuUi &menu, GLFWwindow *window) {
     glBindVertexArray(menu.vao);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+    // Evento e input do rato
     glfwSwapBuffers(window);
     glfwPollEvents();
 
@@ -93,6 +98,7 @@ bool RunStartMenu(MenuUi &menu, GLFWwindow *window) {
 
 LoseMenuResult ShowLoseMenu(MenuUi &menu, GLFWwindow *window, int width,
                             int height) {
+  // Desenha menu de derrota e valida clique
   LoseMenuResult result;
   if (!menu.loseTexture) {
     return result;
@@ -108,6 +114,7 @@ LoseMenuResult ShowLoseMenu(MenuUi &menu, GLFWwindow *window, int width,
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
   glEnable(GL_DEPTH_TEST);
 
+  // Trata clique nas areas configuradas
   double mouseX = 0.0;
   double mouseY = 0.0;
   glfwGetCursorPos(window, &mouseX, &mouseY);
@@ -133,6 +140,7 @@ LoseMenuResult ShowLoseMenu(MenuUi &menu, GLFWwindow *window, int width,
 
 WinMenuResult ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width,
                             int height) {
+  // Desenha menu de vitoria e valida clique
   WinMenuResult result;
   if (!menu.winTexture) {
     return result;
@@ -147,6 +155,7 @@ WinMenuResult ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width,
   glBindVertexArray(menu.vao);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+  // Trata clique nas areas configuradas
   double mouseX = 0.0;
   double mouseY = 0.0;
   glfwGetCursorPos(window, &mouseX, &mouseY);
@@ -172,6 +181,7 @@ WinMenuResult ShowWinScreen(MenuUi &menu, GLFWwindow *window, int width,
 }
 
 void CleanupMenuUi(MenuUi &menu) {
+  // Liberta recursos OpenGL do menu
   if (menu.startTexture) {
     glDeleteTextures(1, &menu.startTexture);
     menu.startTexture = 0;

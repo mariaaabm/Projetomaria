@@ -16,17 +16,20 @@
 static float LerpFloat(float a, float b, float t) { return a + (b - a) * t; }
 
 static Vec3 LerpVec3(const Vec3 &a, const Vec3 &b, float t) {
+  // Interpolacao com clamp
   float clamped = std::clamp(t, 0.0f, 1.0f);
   return {LerpFloat(a.x, b.x, clamped), LerpFloat(a.y, b.y, clamped),
           LerpFloat(a.z, b.z, clamped)};
 }
 
 static float SmoothStep01(float t) {
+  // Suavizacao [0,1]
   float clamped = std::clamp(t, 0.0f, 1.0f);
   return clamped * clamped * (3.0f - 2.0f * clamped);
 }
 
 int main() {
+  // Inicializa GLFW e contexto OpenGL
   if (!glfwInit()) {
     std::cerr << "Falha ao iniciar GLFW.\n";
     return 1;
@@ -56,11 +59,13 @@ int main() {
   glEnable(GL_DEPTH_TEST);
   glClearColor(0.18f, 0.19f, 0.21f, 1.0f);
 
+  // Audio em loop
   const char *musicPath = "src/music/Mr Bean Music.mp3";
   if (!InitAudioEngine(musicPath)) {
     std::cerr << "Falha ao iniciar áudio em loop: " << musicPath << "\n";
   }
 
+  // Hotspots do menu (UV)
   MenuBounds menuBounds;
   menuBounds.playMinU = 0.55f; // area do botão na textura inicial
   menuBounds.playMaxU = 0.93f;
@@ -81,6 +86,7 @@ int main() {
   menuBounds.winButtonMinV = 0.12f;
   menuBounds.winButtonMaxV = 0.25f;
   MenuUi menuUi;
+  // Inicializa UI do menu
   if (!InitMenuUi(menuUi, menuBounds, "src/menu/images/menu_inicial.png",
                   "src/menu/images/menu_perder.png",
                   "src/menu/images/menu_ganhar.png")) {
@@ -89,6 +95,7 @@ int main() {
     return 1;
   }
 
+  // Carrega modelos 3D
   Model trackModel;
   if (!LoadObj("assets/textures/pista/pista.obj", trackModel)) {
     glfwDestroyWindow(window);
@@ -112,6 +119,7 @@ int main() {
     return 1;
   }
 
+  // Prepara texturas e buffers de cada modelo
   SetupTextures(trackModel);
   SetupTextures(carModel);
   SetupTextures(policeCarModel);
@@ -126,6 +134,7 @@ int main() {
     SetupMesh(mesh);
   }
 
+  // HUD simples (barra de tempo)
   GLuint hudTexture = 0;
   glGenTextures(1, &hudTexture);
   glBindTexture(GL_TEXTURE_2D, hudTexture);
@@ -150,6 +159,7 @@ int main() {
                         (void *)(sizeof(float) * 2));
   glBindVertexArray(0);
 
+  // Compila shaders
   GLuint trackProgram =
       CreateProgram("shaders/track_vertex.vs", "shaders/track_fragment.fs");
   GLuint carProgram =
@@ -160,6 +170,7 @@ int main() {
     return 1;
   }
 
+  // Locacoes de uniforms
   GLint trackLocModel = glGetUniformLocation(trackProgram, "uModel");
   GLint trackLocView = glGetUniformLocation(trackProgram, "uView");
   GLint trackLocProj = glGetUniformLocation(trackProgram, "uProj");
@@ -182,6 +193,7 @@ int main() {
   GLint carLocTexture = glGetUniformLocation(carProgram, "uTexture");
   GLint carLocUseTexture = glGetUniformLocation(carProgram, "uUseTexture");
 
+  // Escalas do mundo e veiculos
   const float worldScale = 40.0f;
   const float trackHalfExtent = worldScale * 0.5f - 0.5f;
   const float carScale = worldScale * 0.005f;
@@ -190,6 +202,7 @@ int main() {
   float carLift = 0.02f * carScale;
   float policeLift = 0.02f * policeCarScale;
 
+  // Estado inicial e configuracao do movimento
   GameState gameState;
   MovementConfig movementConfig;
   movementConfig.maxSpeed = 3.3f;      // Slower player
@@ -218,6 +231,7 @@ int main() {
   float lastFrameTime = 0.0f;
 
   auto resetGame = [&](float currentTime) {
+    // Reinicia estado do jogo
     gameOver = false;
     playerWon = false;
     gameState.player.position = {0.0f, 0.0f, -6.0f};
@@ -235,6 +249,7 @@ int main() {
   };
 
   auto renderFrame = [&](float currentTime) {
+    // Atualiza tempo e HUD do titulo
     float deltaTime = currentTime - lastFrameTime;
     float elapsedTime = currentTime - startTime;
     lastFrameTime = currentTime;
@@ -247,6 +262,7 @@ int main() {
     }
 
     if (!gameOver) {
+      // Atualiza fisica e IA
       Vec3 prevPlayerPos = gameState.player.position;
       Vec3 prevPolicePos = gameState.police.position;
 
@@ -258,6 +274,7 @@ int main() {
                         trackHalfExtent, gameState.playerTrail);
 
       auto trySlideOnRoad = [&](Vec3 prevPos, Vec3 &pos, VehicleState &state) {
+        // Resolve colisao com a borda da estrada
         Vec2 pos2 = {pos.x, pos.z};
         if (InsideRoad(pos2, gameState.roadTriangles)) {
           return;
@@ -343,6 +360,7 @@ int main() {
       }
     }
 
+    // Prepara frame
     int width = 0;
     int height = 0;
     glfwGetFramebufferSize(window, &width, &height);
@@ -353,6 +371,7 @@ int main() {
     Mat4 proj =
         Mat4Perspective(45.0f * 3.1415926f / 180.0f, aspect, 0.1f, 100.0f);
 
+    // Posicoes e camera
     Vec3 carPos = {gameState.player.position.x,
                    -carModel.minY * carScale + carLift + 0.05f,
                    gameState.player.position.z};
@@ -411,6 +430,7 @@ int main() {
         Mat4Multiply(Mat4RotateY(gameState.police.heading + carBaseRotation),
                      Mat4Scale(policeCarScale)));
 
+    // Desenha pista
     glUseProgram(trackProgram);
     glUniformMatrix4fv(trackLocModel, 1, GL_FALSE, trackMat.m);
     glUniformMatrix4fv(trackLocView, 1, GL_FALSE, view.m);
@@ -442,6 +462,7 @@ int main() {
                    static_cast<GLsizei>(mesh.vertices.size()));
     }
 
+    // Desenha carro do jogador
     glUseProgram(carProgram);
     glUniformMatrix4fv(carLocModel, 1, GL_FALSE, carMat.m);
     glUniformMatrix4fv(carLocView, 1, GL_FALSE, view.m);
@@ -473,6 +494,7 @@ int main() {
                    static_cast<GLsizei>(mesh.vertices.size()));
     }
 
+    // Desenha carro da policia
     glUniformMatrix4fv(carLocModel, 1, GL_FALSE, policeCarMat.m);
     glUniformMatrix4fv(carLocView, 1, GL_FALSE, view.m);
     glUniformMatrix4fv(carLocProj, 1, GL_FALSE, proj.m);
@@ -502,6 +524,7 @@ int main() {
                    static_cast<GLsizei>(mesh.vertices.size()));
     }
 
+    // Menus de fim de jogo
     if (gameOver && !playerWon) {
       LoseMenuResult loseResult = ShowLoseMenu(menuUi, window, width, height);
       if (loseResult.retry) {
@@ -566,6 +589,7 @@ int main() {
   };
 
   if (menuUi.startTexture != 0) {
+    // Mostra menu inicial antes de iniciar o jogo
     bool started = RunStartMenu(menuUi, window);
     if (started) {
       glfwSetTime(0.0);
@@ -587,11 +611,13 @@ int main() {
   }
   // Render imediatamente após sair do menu para evitar frame vazio
   renderFrame(startTime);
+  // Loop principal
   while (!glfwWindowShouldClose(window)) {
     float currentTime = static_cast<float>(glfwGetTime());
     renderFrame(currentTime);
   }
 
+  // Limpeza de recursos
   glDeleteProgram(trackProgram);
   glDeleteProgram(carProgram);
   CleanupModel(trackModel);

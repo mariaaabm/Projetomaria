@@ -8,6 +8,7 @@
 #include <string>
 
 inline std::string LoadTextFile(const std::string &path) {
+  // Le o ficheiro inteiro para memoria
   std::ifstream file(path);
   if (!file) {
     return {};
@@ -18,6 +19,7 @@ inline std::string LoadTextFile(const std::string &path) {
 }
 
 inline GLuint CompileShader(GLenum type, const std::string &source, const std::string &label) {
+  // Compila um shader e devolve o id
   GLuint shader = glCreateShader(type);
   const char *src = source.c_str();
   glShaderSource(shader, 1, &src, nullptr);
@@ -39,6 +41,7 @@ inline GLuint CompileShader(GLenum type, const std::string &source, const std::s
 }
 
 inline GLuint CreateProgram(const std::string &vertexPath, const std::string &fragmentPath) {
+  // Carrega, compila e linka os shaders
   std::string vertexSrc = LoadTextFile(vertexPath);
   std::string fragmentSrc = LoadTextFile(fragmentPath);
   if (vertexSrc.empty() || fragmentSrc.empty()) {
